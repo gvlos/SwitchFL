@@ -1,0 +1,26 @@
+figure.dpi : 200
+savefig.dpi : 200
+axes.titlesize : 24
+axes.titleweight : bold
+axes.titlepad : 10
+axes.labelsize : 24
+axes.labelpad : 8
+axes.linewidth : 4
+legend.fontsize : 20
+lines.linewidth : 3
+lines.markersize : 14
+xtick.labelsize : 24
+ytick.labelsize : 24
+xtick.direction : in
+ytick.direction : in
+xtick.major.pad : 6
+xtick.major.size : 8.0
+xtick.minor.size : 5.0
+ytick.major.pad : 6
+ytick.major.size : 8.0
+ytick.minor.size : 5.0
+xtick.major.width: 4
+xtick.minor.width: 2
+ytick.major.width: 4
+ytick.minor.width: 2
+text.usetex : False
