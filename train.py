@@ -11,6 +11,11 @@ import uuid
 import time
 import multiprocessing
 
+env_width=150
+env_height=150
+env_n_cities=37
+env_n_trains=400
+
 class ModifiedEnv(Environment):
     """
    A wrapper to the Flatland environment that produces a slightly different observation:
@@ -107,10 +112,10 @@ def generate_env(malf_rate, malf_min, malf_max, malf_seed=0):
         The modified environment
     """
     return ModifiedEnv(
-        env_width=150,
-        env_height=150,
-        env_n_cities=37,
-        env_n_trains=400,
+        env_width=env_width,
+        env_height=env_height,
+        env_n_cities=env_n_cities,
+        env_n_trains=env_n_trains,
         seed=13,
         destination_bonus=200,
         deadlock_penalty=-200,
@@ -198,7 +203,7 @@ malf_configs = pd.DataFrame([
 # Hyperparameters
 hp_configs = pd.DataFrame([
     # Best hps from exp 12
-    [1.0, 0.99997, 0.1, 0.99999, int(1e2)],  # blue
+    [1.0, 0.99997, 0.1, 0.99999, int(4e5)],  # blue
     # [1.0, 0.999965, 0.1, 0.99999, int(4e5)],  # orange
     # [1.0, 0.99997, 0.01, 1., int(4e5)],  # green
     # [1.0, 0.999965, 0.01, 1.00000, int(4e5)],  # red
@@ -210,8 +215,8 @@ hp_configs = pd.DataFrame([
 out_dir = 'experiments/test_time'
 n_workers = multiprocessing.cpu_count()
 master_seed = 666
-log_every = 10
-save_every = 10
+log_every = 10_000
+save_every = 10_000
 n_evals_calc = lambda _: 1 # lambda malf_rate: int(300 / malf_rate)
 eval_batch_size = 10_000
 
@@ -220,6 +225,7 @@ if __name__ == '__main__':
     os.makedirs(out_dir, exist_ok=True)
     master_rng = np.random.RandomState(master_seed)
     master_log_file = os.path.join(out_dir, 'log.txt')
+    log2file(master_log_file, f'Env_width={env_width}, env_height={env_height}, env_n_cities={env_n_cities}, env_n_trains={env_n_trains}\n')
     log2file(master_log_file, f'Starting training with {n_workers} workers.')
     executor = concurrent.futures.ProcessPoolExecutor(n_workers)
     tasks = []
@@ -231,6 +237,7 @@ if __name__ == '__main__':
             hp = hp_configs.iloc[hp_idx]
             malf = malf_configs.iloc[malf_idx]
             env = generate_env(malf['rate'], malf['min'], malf['max'])
+            log2file(master_log_file, f'Number of nodes = {len(env.nodes)}\n')
             agent = TQLearningAgent()
             # Experiment directory
             exp_dir = os.path.join(out_dir, f'{exp_id}')
