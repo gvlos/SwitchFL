@@ -1,3 +1,4 @@
+from typing import Any
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
@@ -194,3 +195,8 @@ def generate_local_switch_graphs(graph: nx.Graph) -> nx.Graph:
                 graph.add_edge(next_node, current_node)
         graph.remove_node(node)
     return graph
+
+
+
+def get_switch_id(identifier: Any) -> str:
+    return f"switch_{identifier}"

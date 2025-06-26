@@ -1,0 +1,316 @@
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Literal, Tuple, Type
+
+import networkx as nx
+import numpy as np
+from flatland.envs.agent_utils import EnvAgent
+from flatland.envs.rail_env import RailEnvActions
+from gymnasium.spaces import Discrete
+
+from environment.spaces import DiscreteSwitchObsSpace
+
+
+def add_rail_actions(graph: nx.Graph) -> nx.Graph:
+    actions = {}
+
+    for i, incoming in enumerate(graph.nodes):
+        facing_index = (i + 2) % 4  # Opposite direction (facing)
+        actions[incoming] = {"actions": {}}  # graph.nodes.data()[incoming]
+        for j, target in enumerate(graph.nodes):
+            if incoming == target or target not in graph.neighbors(incoming):
+                continue  # Cannot go back to where you came from
+            relative = (j - facing_index) % 4
+            action = [RailEnvActions.MOVE_FORWARD]
+            if relative == 0:
+                action.append(RailEnvActions.MOVE_FORWARD)
+            elif relative == 1:
+                action.append(RailEnvActions.MOVE_RIGHT)
+            elif relative == 3:
+                action.append(RailEnvActions.MOVE_LEFT)
+            else:
+                action = "invalid"  # Shouldn't occur
+            actions[incoming]["actions"][target] = action
+
+    nx.set_node_attributes(G=graph, values=actions)
+    return graph
+
+
+def build_rail_action_map(graph: nx.Graph) -> List[Dict[Any, List[RailEnvActions]]]:
+    actions = []
+    for node in graph.nodes:
+        for a in graph.nodes.data("actions")[node].values():
+            action = {}
+            action[node] = a
+            for node2 in graph.nodes:
+                if node2 == node:
+                    continue
+                action[node2] = [RailEnvActions.STOP_MOVING, RailEnvActions.STOP_MOVING]
+            actions.append(action)
+    return actions
+
+
+class _SwitchAgent(ABC):
+    # for the inner representation of an agent
+
+    entity: int
+    """what kind of switch are you"""
+    n_gaits: int
+    """how many rails are connected to the switch"""
+    n_rails: int
+    """amount of inner connections"""
+
+    def __init__(
+        self,
+        switch_graph: nx.Graph,
+        n_stations: int,
+        n_delay_levels: int = 3,
+        id: Any = None,
+    ):
+        super().__init__()
+        self.switch_graph = switch_graph
+        self.n_stations = n_stations
+        self.n_delay_levels = n_delay_levels
+        self.id = id
+        if self.id is None:
+            self.id = list(self.switch_graph.nodes.data("switch_id"))[0][1]
+
+        self.switch_nodes = [
+            node for node in self.switch_graph if self.switch_graph.degree(node) == 2
+        ]
+        self.non_switch_nodes = [
+            node for node in self.switch_graph if self.switch_graph.degree(node) == 1
+        ]
+
+        self.action_map = self._build_switch_rail_actions(self.switch_graph)
+        assert len(self.action_map) == self.get_action_space().n
+
+    def __repr__(self):
+        id = self.id
+        n_gaits = len(self.switch_graph.nodes)
+        n_rails = len(self.switch_graph.edges)
+        return f"Switch({id=}, {n_gaits=}, {n_rails=}, {self.action_map})"
+
+    @classmethod
+    def from_switch_graph(
+        cls,
+        switch_graph: nx.Graph,
+        n_stations: int,
+        n_delay_levels: int = 3,
+        id: Any = None,
+    ) -> "_SwitchAgent":
+        n_gaits = len(switch_graph.nodes)
+        n_rails = len(switch_graph.edges)
+        cls = get_agent_abstraction(n_gaits, n_rails)
+        return cls(switch_graph, n_stations, n_delay_levels, id=id)
+
+    def get_train_action(
+        self, action: int, train_agents: List[EnvAgent]
+    ) -> Dict[int, List[RailEnvActions]]:
+        res = {}
+        for train_agent in train_agents:
+            port_node = self._get_port_node_on_position(train_agent.position)
+            if port_node is None:
+                continue
+            res[train_agent.handle] = self.action_map[action][port_node]
+        return res
+
+    def get_observation_space(self, seed: int = None):
+        return DiscreteSwitchObsSpace(
+            self.n_gaits, self.n_stations, self.n_delay_levels, seed=seed
+        )
+
+    @abstractmethod
+    def get_action_space(self, seed: int = None):
+        raise NotImplementedError
+
+    @staticmethod
+    def _build_switch_rail_actions(
+        switch_graph: nx.Graph,
+    ) -> List[Dict[Any, List[RailEnvActions]]]:
+        # add actions to switch_graph
+        switch_graph = add_rail_actions(switch_graph)
+        action_map = build_rail_action_map(switch_graph)
+        return action_map
+
+    def _get_port_node_on_position(
+        self, position: Tuple[int, int]
+    ) -> Tuple[float, float] | None:
+        for node in self.switch_graph.nodes:
+            if self.switch_graph.nodes.data(data="rail_prev_node")[node] == position:
+                return node
+        return None
+
+
+# T or Y junction
+class SwitchAgent1(_SwitchAgent):
+    def __init__(self, switch_graph, n_stations, n_delay_levels=3, id=None):
+        super().__init__(switch_graph, n_stations, n_delay_levels, id)
+        self.entity = 1
+        self.n_gaits = 3
+        self.n_rails = 2
+
+        # switch orientation (horizontal or vertical)
+        self.orientation = self._get_orientation(self.switch_graph)
+
+    def _get_orientation(
+        self, switch_graph: nx.Graph
+    ) -> Literal["horizontal", "vertical", "v_split"]:
+        switch_node_pos = switch_graph.nodes.data(data="pos")[self.switch_node]
+        non_switch_node_pos = switch_graph.nodes.data(data="pos")[
+            self.non_switch_nodes[0]
+        ]
+
+        switch_node_pos = np.array(switch_node_pos)
+        non_switch_node_pos = np.array(non_switch_node_pos)
+
+        # move from switch node to non_switch_node
+        direction_1 = non_switch_node_pos - switch_node_pos
+
+        non_switch_node_pos = switch_graph.nodes.data(data="pos")[
+            self.non_switch_nodes[1]
+        ]
+        non_switch_node_pos = np.array(non_switch_node_pos)
+        direction_2 = non_switch_node_pos - switch_node_pos
+
+        # TODO: does not take rotation if the node into account
+        if direction_1[0] == 0 or direction_2[0] == 0:
+            return "horizontal"
+        elif direction_1[1] == 0 or direction_2[1] == 0:
+            return "vertical"
+        else:
+            return "v_split"
+
+    def get_switch_actions(
+        self, source: Any, target: Any
+    ) -> Dict[Any, List[RailEnvActions]]:
+        switch_policy = {}
+        for non_switch_node in set(self.switch_graph.nodes) - set(source):
+            switch_policy[non_switch_node] = [
+                RailEnvActions.STOP_MOVING,
+                RailEnvActions.STOP_MOVING,
+            ]
+
+        return switch_policy
+        
+    def _get_rail_env_actions(self, action):
+        # action: which action is there to perform
+        # node: which subnode of a swtich subgraph
+        # get go straight actions
+        switch_policy = {}
+        if action == 0:
+            switch_policy = self.get_switch_actions(
+                self.non_switch_nodes[0], self.switch_node
+            )
+        elif action == 1:
+            switch_policy = self.get_switch_actions(
+                self.non_switch_nodes[1], self.switch_node
+            )
+        elif action == 2:
+            switch_policy = self.get_switch_actions(
+                self.switch_node, self.non_switch_nodes[0]
+            )
+        elif action == 3:
+            # direction 2 of switch node
+            switch_policy = self.get_switch_actions(
+                self.switch_node, self.non_switch_nodes[1]
+            )
+        else:
+            raise ValueError("Only for actions [0, ..., 3] available")
+        return switch_policy
+
+    def get_action_space(self, seed: int = None):
+        # gaits: 0, 1, 2
+        # switch gait: 3
+        # 0  1  2
+        # --------
+        # g  w  w
+        # w  g  w
+        # w  w  g1
+        # w  w  g2
+        # can have a different permutation based on orientation
+        return Discrete(4, seed=seed)
+
+    @property
+    def switch_node(self):
+        # only one switch node
+        return self.switch_nodes[0]
+
+
+# Intersection
+class SwitchAgent2(_SwitchAgent):
+    def __init__(self, id, position, n_stations, switch_ports=None, n_delay_levels=3):
+        super().__init__(id, position, n_stations, switch_ports, n_delay_levels)
+        self.entity = 2
+        self.n_gaits = 4
+        self.n_rails = 2
+
+    def get_action_space(self, seed=None):
+        # gaits: 0, 1, 2, 3
+        # switch gait: None
+        # 0  1  2  3
+        # ----------
+        # g  w  g  w
+        # w  g  w  g
+        return Discrete(2, seed=seed)
+
+
+# Intersection with one pass
+class SwitchAgent3(_SwitchAgent):
+    def __init__(self, id, position, n_stations, switch_ports=None, n_delay_levels=3):
+        super().__init__(id, position, n_stations, switch_ports, n_delay_levels)
+        self.entity = 3
+        self.n_gaits = 4
+        self.n_rails = 3
+
+    def get_action_space(self, seed=None):
+        # gaits: 0, 1, 2, 3
+        # switch gait: 0, 3
+        # 0  1  2  3
+        # ----------
+        # g1 w  w  w
+        # g2 w  w  w
+        # w  g  w  w
+        # w  w  g  w
+        # w  w  w  g1
+        # w  w  w  g2
+        return Discrete(6, seed=seed)
+
+
+# Intersection with two passes
+class SwitchAgent4(_SwitchAgent):
+    def __init__(self, id, position, n_stations, switch_ports=None, n_delay_levels=3):
+        super().__init__(id, position, n_stations, switch_ports, n_delay_levels)
+        self.entity = 4
+        self.n_gaits = 4
+        self.n_rails = 4
+
+    def get_action_space(self, seed=None):
+        # gaits: 0, 1, 2, 3
+        # switch gait: 0, 1, 2, 3
+        # 0  1  2  3
+        # ----------
+        # g1 w  w  w
+        # g2 w  w  w
+        # w  g1 w  w
+        # w  g2 w  ww
+        # w  w  g1 w
+        # w  w  g2 w
+        # w  w  w  g1
+        # w  w  w  g2
+        return Discrete(8, seed=seed)
+
+
+def get_agent_abstraction(n_gaits: int, n_rails: int) -> Type[_SwitchAgent]:
+    if n_gaits == 3:
+        return SwitchAgent1
+    elif n_gaits > 4:
+        raise ValueError("No agent type with more than 4 rails")
+
+    if n_rails == 2:
+        return SwitchAgent2
+    elif n_rails == 3:
+        return SwitchAgent3
+    elif n_rails == 4:
+        return SwitchAgent4
+    else:
+        raise ValueError(f"No Agent with {n_gaits=} and {n_rails=}")
