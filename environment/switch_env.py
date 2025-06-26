@@ -152,7 +152,6 @@ class SwitchEnv(AECEnv):
         else:
             base_action.update(action)
             action = base_action
-        print(action)
         self.rail_env.step(action)
 
     def _check_active_switch(self):
@@ -193,6 +192,7 @@ class SwitchEnv(AECEnv):
 
         while len(self.agents) == 0:
             self.move_trains()
+
             # move trains until they arrive on the grid
             current_positions = [train.position for train in self.rail_env.agents]
             current_positions = list(filter(lambda x: x is not None, current_positions))
@@ -203,8 +203,7 @@ class SwitchEnv(AECEnv):
 
         # remove duplicates in agents but maintaining order
         self.agents = list(OrderedDict.fromkeys(self.agents))
-        print(self.agents)
-
+        
     def apply_action(self, switch: _SwitchAgent, action: int):
         rail_env_actions = switch.get_train_action(action, self.rail_env.agents)
         # update train_action_plan such that _do_rail_env step can work it down
