@@ -1,20 +1,14 @@
-from collections import OrderedDict
 import functools
-from abc import ABC, abstractmethod
-from itertools import product
-from typing import Any, Dict, List, Literal, Tuple, Type
+from collections import OrderedDict
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import networkx as nx
-import numpy as np
 import pandas as pd
-from flatland.envs.line_generators import sparse_line_generator
 from flatland.envs.rail_env import RailEnv, RailEnvActions
-from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.step_utils.env_utils import apply_action_independent
 from flatland.utils.rendertools import AgentRenderVariant
-from flatland.envs.agent_utils import EnvAgent
-from gymnasium import Space, spaces
+from gymnasium import spaces
 from pettingzoo import AECEnv
 
 from environment.switch_agents import _SwitchAgent
@@ -26,12 +20,13 @@ from environment.utils import (
     prune_non_switches,
 )
 
+
 class SwitchEnv(AECEnv):
     def __init__(self, rail_env: RailEnv, max_steps: int = 200, seed: int = None):
         super().__init__()
         self.rail_env = rail_env
         self.rail_env.reset()
-        
+
         self.max_steps = max_steps
         self.seed = seed
 
@@ -138,19 +133,20 @@ class SwitchEnv(AECEnv):
         graph = generate_local_switch_graphs(graph)
         return graph
 
-    def _do_rail_env_step(self, action: Dict[int, RailEnvActions] = None):
+    def move_trains(self, action: Dict[int, RailEnvActions] = None):
         base_action = {
             k.handle: RailEnvActions.MOVE_FORWARD for k in self.rail_env.agents
         }
+
         for train_agent_handle in base_action.keys():
-            if (
-                len(self.train_action_plan[train_agent_handle]) == 0
-                or train_agent_handle in action.keys()
-            ):
+            if len(self.train_action_plan[train_agent_handle]) == 0 or (
+                action is not None and train_agent_handle in action.keys()
+            ):  # manual overwrite
                 continue
             base_action[train_agent_handle] = self.train_action_plan[
                 train_agent_handle
             ].pop(0)
+
         if action is None:
             action = base_action
         else:
@@ -159,34 +155,51 @@ class SwitchEnv(AECEnv):
         print(action)
         self.rail_env.step(action)
 
-    def move_trains(self):
-        while len(self.agents) == 0:
-            # check if agent would move on switch mode:
-            current_positions = [agent.position for agent in self.rail_env.agents]
-            current_positions = list(filter(lambda x: x is not None, current_positions))
-            if current_positions == []:
-                self._do_rail_env_step()
+    def _check_active_switch(self):
+        # do simulation step and see if a train enters a switch node -> then add the switch to active agents
+        for train in self.rail_env.agents:
+            if train.position is None:
                 continue
 
-            # do simulation step and see if a train enters a switch node -> then add the switch to active agents
-            for agent in self.rail_env.agents:
-                if len(self.train_action_plan[agent.handle]) > 0:
-                    next_action = self.train_action_plan[agent.handle][0]
-                else:
-                    next_action = RailEnvActions.MOVE_FORWARD
-                # do a simulation step an get the next switch if needed
-                cur_pos = agent.position
-                cur_dir = agent.direction
-                new_pos, _ = apply_action_independent(
-                    next_action,  # standard action for a train agent
-                    self.rail_env.rail,
-                    cur_pos,
-                    cur_dir,
-                )
+            # get next action
+            if len(self.train_action_plan[train.handle]) > 0:
+                next_action = self.train_action_plan[train.handle][0]
+            else:
+                next_action = RailEnvActions.MOVE_FORWARD
 
-                if (self._node_df["switch_pos"] == new_pos).sum():
-                    self.agents.append(get_switch_id(new_pos))
-            self._do_rail_env_step()
+            # do a simulation step an get the next switch if needed
+            new_pos, _ = apply_action_independent(
+                next_action,
+                self.rail_env.rail,
+                train.position,
+                train.direction,
+            )
+
+            if (self._node_df["switch_pos"] == new_pos).sum():
+                self.agents.append(get_switch_id(new_pos))
+
+    def move_trains_to_switch(self):
+
+        # Check active switch (0)
+        # Loop:
+        #     time t
+        #     Train step (t)
+        #     Check active switch (t+1)
+        #
+        # compute switch action (t)
+        # perform action (t)
+
+        # self._check_active_switch()
+
+        while len(self.agents) == 0:
+            self.move_trains()
+            # move trains until they arrive on the grid
+            current_positions = [train.position for train in self.rail_env.agents]
+            current_positions = list(filter(lambda x: x is not None, current_positions))
+            if len(current_positions) == 0:
+                continue
+
+            self._check_active_switch()
 
         # remove duplicates in agents but maintaining order
         self.agents = list(OrderedDict.fromkeys(self.agents))
@@ -209,7 +222,7 @@ class SwitchEnv(AECEnv):
         if options is None:
             options = {}
         self.rail_env.reset(random_seed=seed, **options)
-        self.move_trains()
+        self.move_trains_to_switch()
 
         self.rewards = {agent: 0 for agent in self.possible_agents}
         self._cumulative_rewards = {agent: 0 for agent in self.possible_agents}
@@ -225,7 +238,7 @@ class SwitchEnv(AECEnv):
     def step(self, action):
         self.apply_action(self.switch_agents[self.agent_selection], action)
         if len(self.agents) == 0:
-            self.move_trains()
+            self.move_trains_to_switch()
         self.step_counter[self.agent_selection] += 1
 
     def observe(self, agent):
@@ -238,8 +251,7 @@ class SwitchEnv(AECEnv):
 
     def close(self):
         return super().close()
-    
-    
+
     @property
     def n_steps(self) -> int:
         """accumulated steps from each agents
