@@ -1,5 +1,4 @@
 from typing import Any
-import pandas as pd
 from tqdm import tqdm
 import numpy as np
 
@@ -75,7 +74,12 @@ def create_rail_graph(env: RailEnv, cmap="tab20") -> nx.Graph:
                         switch_id=(next_row, next_col),
                     )
 
-                graph.add_edge((row, col), (next_row, next_col))
+                graph.add_edge(
+                    (row, col),
+                    (next_row, next_col),
+                    rail_nodes=[],
+                    rail_node_to_switch={},
+                )
     return graph
 
 
@@ -99,26 +103,49 @@ def insert_switch_proximity_nodes(graph: nx.Graph) -> nx.Graph:
                 pos=pos.tolist(),
                 switch_id=switch_id,
                 switch_pos=switch_id,
-                rail_prev_node=graph.nodes[neighbor]["switch_id"]
+                rail_prev_node=graph.nodes[neighbor]["switch_id"],
+                approaching_trains=set(),
             )
-            graph.add_edge(neighbor, new_node)
-            graph.add_edge(node, new_node)
+            graph.add_edge(neighbor, new_node, rail_nodes=[], rail_node_to_switch={})
+            graph.add_edge(node, new_node, rail_nodes=[], rail_node_to_switch={})
             graph.remove_edge(node, neighbor)
     return graph
 
 
 def prune_non_switches(graph: nx.Graph) -> nx.Graph:
-    assert not graph.is_directed(), (
-        "Only applicable for undirected graphs. But given graph is directed."
-    )
+    assert (
+        not graph.is_directed()
+    ), "Only applicable for undirected graphs. But given graph is directed."
     for node in list(graph.nodes):
         node_degree = graph.degree(node)
         neighbors_degrees = set([graph.degree(n) for n in graph.neighbors(node)])
         if node_degree == 2 and neighbors_degrees == set([2]):
             prev_node, next_node = list(graph.neighbors(node))
+            
+            
+            rail_node_to_switch = {}
+            for k in graph.edges[(prev_node, node)]["rail_node_to_switch"].keys():
+                rail_node_to_switch[k] = next_node
+            for k in graph.edges[(next_node, node)]["rail_node_to_switch"].keys():
+                rail_node_to_switch[k] = prev_node
+            
+            graph.add_edge(
+                prev_node,
+                next_node,
+                rail_nodes=[
+                    node,
+                    *graph.edges[(prev_node, node)]["rail_nodes"],
+                    *graph.edges[(node, next_node)]["rail_nodes"],
+                ],
+                rail_node_to_switch={
+                    (prev_node, node): next_node,
+                    (next_node, node): prev_node,
+                    # add all previous maps but pointing at the most outer ones
+                    **rail_node_to_switch,
+                },
+            )
             graph.remove_edge(prev_node, node)
             graph.remove_edge(node, next_node)
-            graph.add_edge(prev_node, next_node)
             graph.remove_node(node)
     return graph
 
@@ -192,10 +219,11 @@ def generate_local_switch_graphs(graph: nx.Graph) -> nx.Graph:
             ]
             trans_idx = np.where(dir_combo == (train_facing + train_going))[0].item()
             if allowed_transitions[trans_idx] == "1":
-                graph.add_edge(next_node, current_node)
+                graph.add_edge(
+                    next_node, current_node, rail_nodes=[], rail_node_to_switch={}
+                )
         graph.remove_node(node)
     return graph
-
 
 
 def get_switch_id(identifier: Any) -> str:
