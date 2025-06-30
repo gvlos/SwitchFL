@@ -1,9 +1,9 @@
-from typing import Any
+from typing import Any, Dict, List, Tuple
 from tqdm import tqdm
 import numpy as np
 
 import networkx as nx
-from flatland.envs.rail_env import RailEnv
+from flatland.envs.rail_env import RailEnv, RailEnvActions
 from itertools import product
 import matplotlib.colors as mcolors
 import matplotlib as mpl
@@ -78,7 +78,7 @@ def create_rail_graph(env: RailEnv, cmap="tab20") -> nx.Graph:
                     (row, col),
                     (next_row, next_col),
                     rail_nodes=[],
-                    rail_node_to_switch={},
+                    # rail_node_to_switch={},
                 )
     return graph
 
@@ -106,8 +106,18 @@ def insert_switch_proximity_nodes(graph: nx.Graph) -> nx.Graph:
                 rail_prev_node=graph.nodes[neighbor]["switch_id"],
                 approaching_trains=set(),
             )
-            graph.add_edge(neighbor, new_node, rail_nodes=[], rail_node_to_switch={})
-            graph.add_edge(node, new_node, rail_nodes=[], rail_node_to_switch={})
+            graph.add_edge(
+                neighbor,
+                new_node,
+                rail_nodes=[],
+                # rail_node_to_switch={},
+            )
+            graph.add_edge(
+                node,
+                new_node,
+                rail_nodes=[],
+                # rail_node_to_switch={},
+            )
             graph.remove_edge(node, neighbor)
     return graph
 
@@ -121,14 +131,13 @@ def prune_non_switches(graph: nx.Graph) -> nx.Graph:
         neighbors_degrees = set([graph.degree(n) for n in graph.neighbors(node)])
         if node_degree == 2 and neighbors_degrees == set([2]):
             prev_node, next_node = list(graph.neighbors(node))
-            
-            
-            rail_node_to_switch = {}
-            for k in graph.edges[(prev_node, node)]["rail_node_to_switch"].keys():
-                rail_node_to_switch[k] = next_node
-            for k in graph.edges[(next_node, node)]["rail_node_to_switch"].keys():
-                rail_node_to_switch[k] = prev_node
-            
+
+            # rail_node_to_switch = {}
+            # for k in graph.edges[(prev_node, node)]["rail_node_to_switch"].keys():
+            #     rail_node_to_switch[k] = next_node
+            # for k in graph.edges[(next_node, node)]["rail_node_to_switch"].keys():
+            #     rail_node_to_switch[k] = prev_node
+
             graph.add_edge(
                 prev_node,
                 next_node,
@@ -137,12 +146,12 @@ def prune_non_switches(graph: nx.Graph) -> nx.Graph:
                     *graph.edges[(prev_node, node)]["rail_nodes"],
                     *graph.edges[(node, next_node)]["rail_nodes"],
                 ],
-                rail_node_to_switch={
-                    (prev_node, node): next_node,
-                    (next_node, node): prev_node,
-                    # add all previous maps but pointing at the most outer ones
-                    **rail_node_to_switch,
-                },
+                # rail_node_to_switch={
+                #     (prev_node, node): next_node,
+                #     (next_node, node): prev_node,
+                #     # add all previous maps but pointing at the most outer ones
+                #     **rail_node_to_switch,
+                # },
             )
             graph.remove_edge(prev_node, node)
             graph.remove_edge(node, next_node)
@@ -226,5 +235,41 @@ def generate_local_switch_graphs(graph: nx.Graph) -> nx.Graph:
     return graph
 
 
-def get_switch_id(identifier: Any) -> str:
-    return f"switch_{identifier}"
+def add_rail_actions(graph: nx.Graph) -> nx.Graph:
+    """adds actions to each node.
+    Each action annotation is stored at the 'action' datafield as a dictionary:
+        - key: where the action leads to
+        - value: action sequence
+
+    Example:
+    >>> switch_graph = add_rail_actions(switch_graph)
+    >>> switch_graph.nodes.data('actions')[<source-node>][<target-node>]
+
+    Args:
+        graph (nx.Graph): switch graph without actions
+
+    Returns:
+        nx.Graph: switch graph with actions
+    """
+    actions = {}
+
+    for i, incoming in enumerate(graph.nodes):
+        facing_index = (i + 2) % 4  # Opposite direction (facing)
+        actions[incoming] = {"actions": {}}  # graph.nodes.data()[incoming]
+        for j, target in enumerate(graph.nodes):
+            if incoming == target or target not in graph.neighbors(incoming):
+                continue  # Cannot go back to where you came from
+            relative = (j - facing_index) % 4
+            action = [RailEnvActions.MOVE_FORWARD]  # enter switch
+            if relative == 0:
+                action.append(RailEnvActions.MOVE_FORWARD)
+            elif relative == 1:
+                action.append(RailEnvActions.MOVE_RIGHT)
+            elif relative == 3:
+                action.append(RailEnvActions.MOVE_LEFT)
+            else:
+                action = "invalid"  # Shouldn't occur
+            actions[incoming]["actions"][target] = action
+
+    nx.set_node_attributes(G=graph, values=actions)
+    return graph
