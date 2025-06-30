@@ -8,45 +8,8 @@ from flatland.envs.rail_env import RailEnvActions
 from gymnasium.spaces import Discrete
 
 from environment.spaces import DiscreteSwitchObsSpace
-
-
-def add_rail_actions(graph: nx.Graph) -> nx.Graph:
-    actions = {}
-
-    for i, incoming in enumerate(graph.nodes):
-        facing_index = (i + 2) % 4  # Opposite direction (facing)
-        actions[incoming] = {"actions": {}}  # graph.nodes.data()[incoming]
-        for j, target in enumerate(graph.nodes):
-            if incoming == target or target not in graph.neighbors(incoming):
-                continue  # Cannot go back to where you came from
-            relative = (j - facing_index) % 4
-            action = [RailEnvActions.MOVE_FORWARD]
-            if relative == 0:
-                action.append(RailEnvActions.MOVE_FORWARD)
-            elif relative == 1:
-                action.append(RailEnvActions.MOVE_RIGHT)
-            elif relative == 3:
-                action.append(RailEnvActions.MOVE_LEFT)
-            else:
-                action = "invalid"  # Shouldn't occur
-            actions[incoming]["actions"][target] = action
-
-    nx.set_node_attributes(G=graph, values=actions)
-    return graph
-
-
-def build_rail_action_map(graph: nx.Graph) -> List[Dict[Any, List[RailEnvActions]]]:
-    actions = []
-    for node in graph.nodes:
-        for a in graph.nodes.data("actions")[node].values():
-            action = {}
-            action[node] = a
-            for node2 in graph.nodes:
-                if node2 == node:
-                    continue
-                action[node2] = [RailEnvActions.STOP_MOVING, RailEnvActions.STOP_MOVING]
-            actions.append(action)
-    return actions
+from environment.utils.rail_graph import add_rail_actions
+from environment.utils.switch_agent import build_rail_action_map
 
 
 class _SwitchAgent(ABC):
