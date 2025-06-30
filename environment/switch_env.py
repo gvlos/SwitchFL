@@ -30,6 +30,7 @@ class SwitchEnv(AECEnv):
         self.rail_env = rail_env
         self.rail_env.reset()
 
+
         self.max_steps = max_steps
         self.seed = seed
 
@@ -37,7 +38,7 @@ class SwitchEnv(AECEnv):
 
         pos = self.switch_network_graph.nodes.data(data="pos")
         pos = {k: v for k, v in pos}
-
+    
         self._node_df = self.get_node_df(self.switch_network_graph)
 
         # switch agents
@@ -61,6 +62,7 @@ class SwitchEnv(AECEnv):
         self.train_reward = {train.handle: 0 for train in self.rail_env.agents}
         self.train_done = {train.handle: False for train in self.rail_env.agents}
         self.train_info = {train.handle: None for train in self.rail_env.agents}
+        self.train_targets = {train.target: idx for idx, train in enumerate(self.rail_env.agents)}
 
         self.switch_agents = self.build_agent_abstraction(
             self._node_df, self.possible_agents
@@ -116,10 +118,8 @@ class SwitchEnv(AECEnv):
             index=[idx for idx, _ in graph.nodes.data()],
         )
         # build intra node_df
-        df["intra_switch_index"] = df.index.to_series().apply(
-            lambda x: int(str(x[0])[-1])
-        )
-
+        df["intra_switch_index"] = df.index.to_series().apply(lambda x: int(str(x[0])[-1]))
+        
         return df
 
     def _create_switch_graph(self, env: RailEnv) -> nx.Graph:
@@ -167,30 +167,26 @@ class SwitchEnv(AECEnv):
     def _compute_delay(self, train: TrainAgent):
         """
         Returns the delay of the given train
-
+        
         Args:
             train_id (int): The id of the train
 
         Returns:
             int: The delay of the given train
         """
-        row, col = (
-            train.position if train.position is not None else train.initial_position
-        )
-        min_dist_to_target = self.rail_env.distance_map.get()[
-            train.handle, row, col, train.direction
-        ]
+        row, col = train.position if train.position is not None else train.initial_position
+        min_dist_to_target = self.rail_env.distance_map.get()[train.handle, row, col, train.direction]
         # assume you are moving with max speed=1
         return self.rail_env._elapsed_steps - train.latest_arrival + min_dist_to_target
 
     def _discretize_delay(self, train: TrainAgent, delay: int) -> int:
         """
         Discretizes the delay of the given train
-
+        
         Args:
             train_id (TrainAgent): The id of the train
             delay (int): The delay of the train
-
+            
         Returns:
             int: The discretized delay of the given train
         """
@@ -215,20 +211,26 @@ class SwitchEnv(AECEnv):
                 train_agent_handle
             ].pop(0)
 
+        # overwrite with custom action but always reduce train_action_plan
         if action is None:
             action = base_action
         else:
             base_action.update(action)
             action = base_action
+            
+        # check for done trains and remove actions for it
+        for train in self.rail_env.agents:
+            if self.train_done[train.handle]:
+                action.pop(train.handle)
+            
+        # do rail env step
         self.train_obs, self.train_reward, self.train_done, self.train_info = (
             self.rail_env.step(action)
         )
-
+        
         # check for all trains being done
         if self.train_done["__all__"]:
-            self.terminations = {
-                switch_agent: True for switch_agent in self.terminations.keys()
-            }
+            self.terminations = {switch_agent: True for switch_agent in self.terminations.keys()}
             self.terminated = True
 
     def _check_active_switch(self):
@@ -333,7 +335,7 @@ class SwitchEnv(AECEnv):
         self.truncations = {agent: False for agent in self.possible_agents}
         self.infos = {agent: {} for agent in self.possible_agents}
         self.observations = {agent: None for agent in self.possible_agents}
-
+        
         self.num_moves = 0
         self.terminated = False
         self.truncated = False
@@ -348,40 +350,35 @@ class SwitchEnv(AECEnv):
 
         self.step_counter[self.agent_selection] += 1
         if self.n_steps > self.max_steps:
-            self.truncations = {
-                switch_agent: True for switch_agent in self.truncations.keys()
-            }
+            self.truncations = {switch_agent: True for switch_agent in self.truncations.keys()}
             self.truncated = True
 
     def observe(self, agent):
         # get current observation
-
+        
         # sort switch nodes according to first decimal -> use node_df
-        switch_id = tuple(
-            map(lambda x: int(x), agent.split("_")[1].strip("()").split(", "))
-        )
-        df = self._node_df[self._node_df["switch_id"] == switch_id][
-            "intra_switch_index"
-        ]
+        switch_id = tuple(map(lambda x: int(x), agent.split("_")[1].strip("()").split(", ")))
+        df = self._node_df[self._node_df["switch_id"] == switch_id]["intra_switch_index"]
         df = df.reset_index(0).set_index("intra_switch_index")
-
+        
         semaphore = []
         target = []
         delay = []
-        train_at_ports = self.switch_agents[switch_id].map_train_to_port(
-            self.rail_env.agents
-        )
+        train_at_ports = self.switch_agents[agent].map_train_to_port(self.rail_env.agents)
         for node in df["index"]:
-            semaphore.append(self.switch_agents[switch_id].semaphores[node])
-
+            semaphore.append(self.switch_agents[agent].semaphores[node])
+            
             train = train_at_ports[node]
             if train is None:
-                delay.append(0)
-                target.append(0)
+                delay.append(-1)
+                target.append(-1)
             else:
                 delay.append(self._discretize_delay(train, self._compute_delay(train)))
-                target.append(train.target)
-        self.observations[agent] = np.array([*semaphore, *delay, *target])
+                target.append(self.train_targets[train.target])
+        semaphore = np.array(semaphore).astype(int)
+        target = np.array(target).astype(int)
+        delay = np.array(delay).astype(int)
+        self.observations[agent] = np.concatenate([semaphore, delay, target])
         self.rewards[agent] = 0  # TODO: still open issue
         self.infos[agent].update(
             {"action_mask": self.switch_agents[agent].get_action_mask()}
@@ -397,9 +394,3 @@ class SwitchEnv(AECEnv):
 
     @property
     def n_steps(self) -> int:
-        """accumulated steps from each agents
-
-        Returns:
-            int: _description_
-        """
-        return sum(self.step_counter.values())
