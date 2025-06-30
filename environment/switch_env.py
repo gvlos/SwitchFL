@@ -12,10 +12,10 @@ from gymnasium import spaces
 from pettingzoo import AECEnv
 
 from environment.switch_agents import _SwitchAgent
-from environment.utils import (
+from environment.utils.naming import get_switch_id
+from environment.utils.rail_graph import (
     create_rail_graph,
     generate_local_switch_graphs,
-    get_switch_id,
     insert_switch_proximity_nodes,
     prune_non_switches,
 )
@@ -30,9 +30,9 @@ class SwitchEnv(AECEnv):
         self.max_steps = max_steps
         self.seed = seed
 
-        self.graph = self._create_switch_graph(self.rail_env)
+        self.switch_network_graph = self._create_switch_graph(self.rail_env)
 
-        pos = self.graph.nodes.data(data="pos")
+        pos = self.switch_network_graph.nodes.data(data="pos")
         pos = {k: v for k, v in pos}
 
         fig, ax = plt.subplots()
@@ -42,18 +42,20 @@ class SwitchEnv(AECEnv):
         ax.text(2, 1, "E")
         ax.text(0, 1, "W")
         nx.draw(
-            self.graph,
+            self.switch_network_graph,
             pos,
             # connectionstyle="arc3,rad=0.1",
             with_labels=False,
-            node_color=dict(self.graph.nodes.data(data="node_color")).values(),
+            node_color=dict(
+                self.switch_network_graph.nodes.data(data="node_color")
+            ).values(),
             edge_color="gray",
             node_size=3,
             # arrowsize=3
             ax=ax,
         )
 
-        self._node_df = self.get_node_df(self.graph)
+        self._node_df = self.get_node_df(self.switch_network_graph)
 
         # switch agents
         self.possible_agents = [
@@ -91,7 +93,7 @@ class SwitchEnv(AECEnv):
     ) -> Dict[str, _SwitchAgent]:
         agents = {}
         for switch_id, group in node_df.groupby("switch_id"):
-            subgraph = self.graph.subgraph(group.index)
+            subgraph = self.switch_network_graph.subgraph(group.index)
             switch_agent = _SwitchAgent.from_switch_graph(
                 subgraph, self.rail_env.rail_generator.max_num_cities
             )
@@ -133,6 +135,41 @@ class SwitchEnv(AECEnv):
         graph = generate_local_switch_graphs(graph)
         return graph
 
+    def _build_semaphores(self):
+        """executed in reset()
+
+        finds all train positions and setups all semaphores for all switches.
+
+        Assume:
+        - all trains are already on the grid
+        - at least one train is in front of a switch
+        """
+
+        for train in self.rail_env.agents:
+            # simulate steps of a train until they arrive at a switch
+            # NOTE: yes this is expensive, but only executed once in reset()
+            current_pos = train.position
+            current_dir = train.direction
+            while True:
+                if sum(self._node_df["switch_pos"] == current_pos):
+                    # train on switch
+                    break
+                last_pos = current_pos
+                current_pos, current_dir = apply_action_independent(
+                    RailEnvActions.MOVE_FORWARD,
+                    self.rail_env.rail,
+                    current_pos,
+                    current_dir,
+                )
+            # last pos corresponds to rail_prev_node
+            switch_id = self._node_df[
+                (self._node_df["rail_prev_node"] == last_pos)
+                & (self._node_df["switch_pos"] == current_pos)
+            ]["switch_id"]
+            self.switch_agents[get_switch_id(switch_id.item())].semaphores[
+                switch_id.index.item()
+            ] = True
+
     def move_trains(self, action: Dict[int, RailEnvActions] = None):
         base_action = {
             k.handle: RailEnvActions.MOVE_FORWARD for k in self.rail_env.agents
@@ -152,7 +189,7 @@ class SwitchEnv(AECEnv):
         else:
             base_action.update(action)
             action = base_action
-        self.rail_env.step(action)
+        obs = self.rail_env.step(action)
 
     def _check_active_switch(self):
         # do simulation step and see if a train enters a switch node -> then add the switch to active agents
@@ -175,7 +212,8 @@ class SwitchEnv(AECEnv):
             )
 
             if (self._node_df["switch_pos"] == new_pos).sum():
-                self.agents.append(get_switch_id(new_pos))
+                switch_id = get_switch_id(new_pos)
+                self.agents.append(switch_id)
 
     def move_trains_to_switch(self):
 
@@ -191,6 +229,8 @@ class SwitchEnv(AECEnv):
         # self._check_active_switch()
 
         while len(self.agents) == 0:
+            # NOTE: after resetting the environment all trains are in a standstill
+            # -> they have to be moved first after the reset
             self.move_trains()
 
             # move trains until they arrive on the grid
@@ -203,9 +243,26 @@ class SwitchEnv(AECEnv):
 
         # remove duplicates in agents but maintaining order
         self.agents = list(OrderedDict.fromkeys(self.agents))
-        
+
     def apply_action(self, switch: _SwitchAgent, action: int):
         rail_env_actions = switch.get_train_action(action, self.rail_env.agents)
+
+        # transition rail network graph
+
+        # 1. free semaphore on current switch
+        source, target = switch.outcomes[action]
+        switch.free_port(source)
+        # 2. find next switch (account for simple intersection)
+        neighbors = self.switch_network_graph.neighbors(target)
+        next_switch = self._node_df[
+            self._node_df.index.isin(neighbors)
+            & (self._node_df["switch_id"] != switch.id)
+        ]
+        next_switch_id = get_switch_id(next_switch["switch_id"].item())
+        # 3. activate semaphore on next switch
+        port = next_switch.index.item()
+        self.switch_agents[next_switch_id].block_port(port)
+
         # update train_action_plan such that _do_rail_env step can work it down
         for train_agent_handle in rail_env_actions.keys():
             self.train_action_plan[train_agent_handle].extend(
@@ -222,6 +279,7 @@ class SwitchEnv(AECEnv):
             options = {}
         self.rail_env.reset(random_seed=seed, **options)
         self.move_trains_to_switch()
+        self._build_semaphores()
 
         self.rewards = {agent: 0 for agent in self.possible_agents}
         self._cumulative_rewards = {agent: 0 for agent in self.possible_agents}
@@ -238,10 +296,21 @@ class SwitchEnv(AECEnv):
         self.apply_action(self.switch_agents[self.agent_selection], action)
         if len(self.agents) == 0:
             self.move_trains_to_switch()
+            plt.imshow(self.render())
+            plt.axis("off")
+            plt.show()
+
         self.step_counter[self.agent_selection] += 1
 
     def observe(self, agent):
-        return self.observations[agent]
+        # get current observation
+        observation = None
+        reward = None
+        termination = None
+        truncation = None
+        self.infos[agent].update(
+            {"action_mask": self.switch_agents[agent].get_action_mask()}
+        )
 
     def render(self):
         return self.rail_env.render(
