@@ -77,6 +77,7 @@ class _SwitchAgent(ABC):
         for train_agent in train_agents:
             port_node = self._get_port_node_on_position(train_agent.position)
             if port_node is None:
+                # train is not at a port node
                 continue
 
             if self.semaphores[self.outcomes[action][1]]:
@@ -84,6 +85,12 @@ class _SwitchAgent(ABC):
                     f"Semaphore is blocked. Action with transition: {self.outcomes[action]} is not available"
                 )
             res[train_agent.handle] = self.action_map[action][port_node]
+
+        # NOTE: if the train is the only train at the switch:
+        # just one waiting block -> otherwise we clog up the train_action_plan
+        if len(res) == 1 and list(res.values())[0][0] == RailEnvActions.STOP_MOVING:
+            res[list(res.keys())[0]] = [RailEnvActions.STOP_MOVING]
+
         return res
 
     def block_port(self, port: Any):
