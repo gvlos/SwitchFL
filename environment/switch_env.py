@@ -1,10 +1,13 @@
 import functools
+import logging
 from collections import OrderedDict
 from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import pandas as pd
+from flatland.envs.rail_env import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnv, RailEnvActions
 from flatland.envs.step_utils.env_utils import apply_action_independent
 from flatland.utils.rendertools import AgentRenderVariant
@@ -35,26 +38,6 @@ class SwitchEnv(AECEnv):
         pos = self.switch_network_graph.nodes.data(data="pos")
         pos = {k: v for k, v in pos}
 
-        fig, ax = plt.subplots()
-        ax.scatter(1, 1)
-        ax.text(1, 2, "N")
-        ax.text(1, 0, "S")
-        ax.text(2, 1, "E")
-        ax.text(0, 1, "W")
-        nx.draw(
-            self.switch_network_graph,
-            pos,
-            # connectionstyle="arc3,rad=0.1",
-            with_labels=False,
-            node_color=dict(
-                self.switch_network_graph.nodes.data(data="node_color")
-            ).values(),
-            edge_color="gray",
-            node_size=3,
-            # arrowsize=3
-            ax=ax,
-        )
-
         self._node_df = self.get_node_df(self.switch_network_graph)
 
         # switch agents
@@ -73,6 +56,11 @@ class SwitchEnv(AECEnv):
         self.step_counter = {k: 0 for k in self.possible_agents}
         self.terminated = False
         self.truncated = False
+
+        self.train_obs = {train.handle: None for train in self.rail_env.agents}
+        self.train_reward = {train.handle: 0 for train in self.rail_env.agents}
+        self.train_done = {train.handle: False for train in self.rail_env.agents}
+        self.train_info = {train.handle: None for train in self.rail_env.agents}
 
         self.switch_agents = self.build_agent_abstraction(
             self._node_df, self.possible_agents
@@ -123,10 +111,16 @@ class SwitchEnv(AECEnv):
         return self.action_spaces[agent]
 
     def get_node_df(self, graph: nx.Graph) -> pd.DataFrame:
-        return pd.DataFrame(
+        df = pd.DataFrame(
             [attr for _, attr in graph.nodes.data()],
             index=[idx for idx, _ in graph.nodes.data()],
         )
+        # build intra node_df
+        df["intra_switch_index"] = df.index.to_series().apply(
+            lambda x: int(str(x[0])[-1])
+        )
+
+        return df
 
     def _create_switch_graph(self, env: RailEnv) -> nx.Graph:
         graph = create_rail_graph(env)
@@ -170,6 +164,43 @@ class SwitchEnv(AECEnv):
                 switch_id.index.item()
             ] = True
 
+    def _compute_delay(self, train: TrainAgent):
+        """
+        Returns the delay of the given train
+
+        Args:
+            train_id (int): The id of the train
+
+        Returns:
+            int: The delay of the given train
+        """
+        row, col = (
+            train.position if train.position is not None else train.initial_position
+        )
+        min_dist_to_target = self.rail_env.distance_map.get()[
+            train.handle, row, col, train.direction
+        ]
+        # assume you are moving with max speed=1
+        return self.rail_env._elapsed_steps - train.latest_arrival + min_dist_to_target
+
+    def _discretize_delay(self, train: TrainAgent, delay: int) -> int:
+        """
+        Discretizes the delay of the given train
+
+        Args:
+            train_id (TrainAgent): The id of the train
+            delay (int): The delay of the train
+
+        Returns:
+            int: The discretized delay of the given train
+        """
+        available_time = train.latest_arrival - train.earliest_departure
+        if delay <= 0:
+            return 0
+        if delay <= available_time * self.delay_threshold:
+            return 1
+        return 2
+
     def move_trains(self, action: Dict[int, RailEnvActions] = None):
         base_action = {
             k.handle: RailEnvActions.MOVE_FORWARD for k in self.rail_env.agents
@@ -189,7 +220,16 @@ class SwitchEnv(AECEnv):
         else:
             base_action.update(action)
             action = base_action
-        obs = self.rail_env.step(action)
+        self.train_obs, self.train_reward, self.train_done, self.train_info = (
+            self.rail_env.step(action)
+        )
+
+        # check for all trains being done
+        if self.train_done["__all__"]:
+            self.terminations = {
+                switch_agent: True for switch_agent in self.terminations.keys()
+            }
+            self.terminated = True
 
     def _check_active_switch(self):
         # do simulation step and see if a train enters a switch node -> then add the switch to active agents
@@ -228,7 +268,7 @@ class SwitchEnv(AECEnv):
 
         # self._check_active_switch()
 
-        while len(self.agents) == 0:
+        while len(self.agents) == 0 and not self.terminated:
             # NOTE: after resetting the environment all trains are in a standstill
             # -> they have to be moved first after the reset
             self.move_trains()
@@ -245,12 +285,16 @@ class SwitchEnv(AECEnv):
         self.agents = list(OrderedDict.fromkeys(self.agents))
 
     def apply_action(self, switch: _SwitchAgent, action: int):
+        logging.debug("______")
+        logging.debug(f"{action=}")
         rail_env_actions = switch.get_train_action(action, self.rail_env.agents)
-
+        logging.debug(rail_env_actions)
         # transition rail network graph
 
         # 1. free semaphore on current switch
         source, target = switch.outcomes[action]
+        logging.debug(source, target)
+        logging.debug(switch.semaphores)
         switch.free_port(source)
         # 2. find next switch (account for simple intersection)
         neighbors = self.switch_network_graph.neighbors(target)
@@ -262,12 +306,14 @@ class SwitchEnv(AECEnv):
         # 3. activate semaphore on next switch
         port = next_switch.index.item()
         self.switch_agents[next_switch_id].block_port(port)
+        logging.debug(self.switch_agents[next_switch_id].semaphores)
 
         # update train_action_plan such that _do_rail_env step can work it down
         for train_agent_handle in rail_env_actions.keys():
             self.train_action_plan[train_agent_handle].extend(
                 rail_env_actions[train_agent_handle]
             )
+        logging.debug(self.train_action_plan)
 
     def agent_iter(self, max_iter=2**63):
         while not (self.terminated or self.truncated):
@@ -301,13 +347,42 @@ class SwitchEnv(AECEnv):
             plt.show()
 
         self.step_counter[self.agent_selection] += 1
+        if self.n_steps > self.max_steps:
+            self.truncations = {
+                switch_agent: True for switch_agent in self.truncations.keys()
+            }
+            self.truncated = True
 
     def observe(self, agent):
         # get current observation
-        observation = None
-        reward = None
-        termination = None
-        truncation = None
+
+        # sort switch nodes according to first decimal -> use node_df
+        switch_id = tuple(
+            map(lambda x: int(x), agent.split("_")[1].strip("()").split(", "))
+        )
+        df = self._node_df[self._node_df["switch_id"] == switch_id][
+            "intra_switch_index"
+        ]
+        df = df.reset_index(0).set_index("intra_switch_index")
+
+        semaphore = []
+        target = []
+        delay = []
+        train_at_ports = self.switch_agents[switch_id].map_train_to_port(
+            self.rail_env.agents
+        )
+        for node in df["index"]:
+            semaphore.append(self.switch_agents[switch_id].semaphores[node])
+
+            train = train_at_ports[node]
+            if train is None:
+                delay.append(0)
+                target.append(0)
+            else:
+                delay.append(self._discretize_delay(train, self._compute_delay(train)))
+                target.append(train.target)
+        self.observations[agent] = np.array([*semaphore, *delay, *target])
+        self.rewards[agent] = 0  # TODO: still open issue
         self.infos[agent].update(
             {"action_mask": self.switch_agents[agent].get_action_mask()}
         )
