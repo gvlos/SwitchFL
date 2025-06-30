@@ -93,6 +93,16 @@ class _SwitchAgent(ABC):
 
         return res
 
+    
+    def map_train_to_port(self, trains: List[TrainAgent]) -> Dict[Any, TrainAgent | None]:
+        res = {node: None for node in self.switch_graph.nodes}
+        for train in trains:
+            port = self._get_port_node_on_position(train.position)
+            if port is None:
+                continue
+            res[port] = train   
+        return res
+                
     def block_port(self, port: Any):
         if port not in self.semaphores.keys():
             print(f"{port=} is not part of switch:{self.id}")
