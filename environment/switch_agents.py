@@ -51,7 +51,7 @@ class _SwitchAgent(ABC):
         id = self.id
         n_gaits = len(self.switch_graph.nodes)
         n_rails = len(self.switch_graph.edges)
-        return f"Switch({id=}, {n_gaits=}, {n_rails=}, {self.action_map})"
+        return f"Switch({id=}, {n_gaits=}, {n_rails=})"
 
     @classmethod
     def from_switch_graph(
