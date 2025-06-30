@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Literal, Tuple, Type
 
 import networkx as nx
 import numpy as np
-from flatland.envs.agent_utils import EnvAgent
+from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnvActions
 from gymnasium.spaces import Discrete
 
@@ -43,8 +43,12 @@ class _SwitchAgent(ABC):
         self.non_switch_nodes = [
             node for node in self.switch_graph if self.switch_graph.degree(node) == 1
         ]
+        self.semaphores = {n: False for n in self.switch_graph.nodes}
 
-        self.action_map = self._build_switch_rail_actions(self.switch_graph)
+        self.action_map, self.outcomes = self._build_switch_rail_actions(
+            self.switch_graph
+        )
+
         assert len(self.action_map) == self.get_action_space().n
 
     def __repr__(self):
@@ -67,15 +71,42 @@ class _SwitchAgent(ABC):
         return cls(switch_graph, n_stations, n_delay_levels, id=id)
 
     def get_train_action(
-        self, action: int, train_agents: List[EnvAgent]
+        self, action: int, train_agents: List[TrainAgent]
     ) -> Dict[int, List[RailEnvActions]]:
         res = {}
         for train_agent in train_agents:
             port_node = self._get_port_node_on_position(train_agent.position)
             if port_node is None:
                 continue
+
+            if self.semaphores[self.outcomes[action][1]]:
+                raise RuntimeError(
+                    f"Semaphore is blocked. Action with transition: {self.outcomes[action]} is not available"
+                )
             res[train_agent.handle] = self.action_map[action][port_node]
         return res
+
+    def block_port(self, port: Any):
+        if port not in self.semaphores.keys():
+            print(f"{port=} is not part of switch:{self.id}")
+            return
+        self.semaphores[port] = True
+
+    def free_port(self, port: Any):
+        if port not in self.semaphores.keys():
+            print(f"{port=} is not part of switch:{self.id}")
+            return
+        self.semaphores[port] = False
+
+    def get_action_mask(self) -> np.ndarray:
+        """which actions are allowed wrt. incoming train semaphores
+
+        Returns:
+            np.ndarray: integer array. 1: action allowed, 0: action forbidden (n_actions, )
+        """
+        mask = [self.semaphores[target] for _, target in self.outcomes]
+        mask = (~np.array(mask)).astype(np.int8)
+        return mask
 
     def get_observation_space(self, seed: int = None):
         return DiscreteSwitchObsSpace(
@@ -90,6 +121,15 @@ class _SwitchAgent(ABC):
     def _build_switch_rail_actions(
         switch_graph: nx.Graph,
     ) -> List[Dict[Any, List[RailEnvActions]]]:
+        """returns a list of actions for each port.
+
+        Args:
+            switch_graph (nx.Graph): switch graph with ports and inter-connectivity's
+
+        Returns:
+            List[Dict[Any, List[RailEnvActions]]]: each element in the list is a collection of actions for each port:
+                Each dictionary: key=port(node)-identifier, value=Sequence of actions(enter switch leave switch)
+        """
         # add actions to switch_graph
         switch_graph = add_rail_actions(switch_graph)
         action_map = build_rail_action_map(switch_graph)
@@ -102,6 +142,32 @@ class _SwitchAgent(ABC):
             if self.switch_graph.nodes.data(data="rail_prev_node")[node] == position:
                 return node
         return None
+
+
+# T or Y junction
+class SwitchAgent1(_SwitchAgent):
+    def __init__(self, switch_graph, n_stations, n_delay_levels=3, id=None):
+        super().__init__(switch_graph, n_stations, n_delay_levels, id)
+        self.entity = 1
+        self.n_gaits = 3
+        self.n_rails = 2
+
+    def get_action_space(self, seed: int = None):
+        # gaits: 0, 1, 2
+        # switch gait: 3
+        # 0  1  2
+        # --------
+        # g  w  w
+        # w  g  w
+        # w  w  g1
+        # w  w  g2
+        # can have a different permutation based on orientation
+        return Discrete(4, seed=seed)
+
+    @property
+    def switch_node(self):
+        # only one switch node
+        return self.switch_nodes[0]
 
 
 # T or Y junction
