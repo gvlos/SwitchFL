@@ -195,75 +195,6 @@ class SwitchAgent1(_SwitchAgent):
         self.n_gaits = 3
         self.n_rails = 2
 
-        # switch orientation (horizontal or vertical)
-        self.orientation = self._get_orientation(self.switch_graph)
-
-    def _get_orientation(
-        self, switch_graph: nx.Graph
-    ) -> Literal["horizontal", "vertical", "v_split"]:
-        switch_node_pos = switch_graph.nodes.data(data="pos")[self.switch_node]
-        non_switch_node_pos = switch_graph.nodes.data(data="pos")[
-            self.non_switch_nodes[0]
-        ]
-
-        switch_node_pos = np.array(switch_node_pos)
-        non_switch_node_pos = np.array(non_switch_node_pos)
-
-        # move from switch node to non_switch_node
-        direction_1 = non_switch_node_pos - switch_node_pos
-
-        non_switch_node_pos = switch_graph.nodes.data(data="pos")[
-            self.non_switch_nodes[1]
-        ]
-        non_switch_node_pos = np.array(non_switch_node_pos)
-        direction_2 = non_switch_node_pos - switch_node_pos
-
-        # TODO: does not take rotation if the node into account
-        if direction_1[0] == 0 or direction_2[0] == 0:
-            return "horizontal"
-        elif direction_1[1] == 0 or direction_2[1] == 0:
-            return "vertical"
-        else:
-            return "v_split"
-
-    def get_switch_actions(
-        self, source: Any, target: Any
-    ) -> Dict[Any, List[RailEnvActions]]:
-        switch_policy = {}
-        for non_switch_node in set(self.switch_graph.nodes) - set(source):
-            switch_policy[non_switch_node] = [
-                RailEnvActions.STOP_MOVING,
-                RailEnvActions.STOP_MOVING,
-            ]
-
-        return switch_policy
-        
-    def _get_rail_env_actions(self, action):
-        # action: which action is there to perform
-        # node: which subnode of a swtich subgraph
-        # get go straight actions
-        switch_policy = {}
-        if action == 0:
-            switch_policy = self.get_switch_actions(
-                self.non_switch_nodes[0], self.switch_node
-            )
-        elif action == 1:
-            switch_policy = self.get_switch_actions(
-                self.non_switch_nodes[1], self.switch_node
-            )
-        elif action == 2:
-            switch_policy = self.get_switch_actions(
-                self.switch_node, self.non_switch_nodes[0]
-            )
-        elif action == 3:
-            # direction 2 of switch node
-            switch_policy = self.get_switch_actions(
-                self.switch_node, self.non_switch_nodes[1]
-            )
-        else:
-            raise ValueError("Only for actions [0, ..., 3] available")
-        return switch_policy
-
     def get_action_space(self, seed: int = None):
         # gaits: 0, 1, 2
         # switch gait: 3
@@ -275,7 +206,7 @@ class SwitchAgent1(_SwitchAgent):
         # w  w  g2
         # can have a different permutation based on orientation
         return Discrete(4, seed=seed)
-
+    
     @property
     def switch_node(self):
         # only one switch node
