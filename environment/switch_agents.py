@@ -161,31 +161,6 @@ class _SwitchAgent(ABC):
         return None
 
 
-# T or Y junction
-class SwitchAgent1(_SwitchAgent):
-    def __init__(self, switch_graph, n_stations, n_delay_levels=3, id=None):
-        super().__init__(switch_graph, n_stations, n_delay_levels, id)
-        self.entity = 1
-        self.n_gaits = 3
-        self.n_rails = 2
-
-    def get_action_space(self, seed: int = None):
-        # gaits: 0, 1, 2
-        # switch gait: 3
-        # 0  1  2
-        # --------
-        # g  w  w
-        # w  g  w
-        # w  w  g1
-        # w  w  g2
-        # can have a different permutation based on orientation
-        return Discrete(4, seed=seed)
-
-    @property
-    def switch_node(self):
-        # only one switch node
-        return self.switch_nodes[0]
-
 
 # T or Y junction
 class SwitchAgent1(_SwitchAgent):
@@ -203,10 +178,10 @@ class SwitchAgent1(_SwitchAgent):
         # g  w  w
         # w  g  w
         # w  w  g1
-        # w  w  g2
+        # w  w  g2          
         # can have a different permutation based on orientation
         return Discrete(4, seed=seed)
-    
+
     @property
     def switch_node(self):
         # only one switch node

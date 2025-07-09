@@ -57,7 +57,7 @@ def create_rail_graph(env: RailEnv, cmap="tab20") -> nx.Graph:
                             2:
                         ].zfill(16),
                         node_color=node_color,
-                        pos=pos,
+                        position=pos,
                         switch_id=(row, col),
                     )
                 if not graph.has_node((next_row, next_col)):
@@ -70,7 +70,7 @@ def create_rail_graph(env: RailEnv, cmap="tab20") -> nx.Graph:
                             env.rail.get_full_transitions(next_row, next_col)
                         )[2:].zfill(16),
                         node_color=node_color,
-                        pos=pos,
+                        position=pos,
                         switch_id=(next_row, next_col),
                     )
 
@@ -100,9 +100,9 @@ def insert_switch_proximity_nodes(graph: nx.Graph) -> nx.Graph:
             graph.add_node(
                 new_node,
                 node_color=switch_color,
-                pos=pos.tolist(),
+                position=pos,
                 switch_id=switch_id,
-                switch_pos=switch_id,
+                switch_position=switch_id,
                 rail_prev_node=graph.nodes[neighbor]["switch_id"],
                 approaching_trains=set(),
             )
@@ -110,13 +110,11 @@ def insert_switch_proximity_nodes(graph: nx.Graph) -> nx.Graph:
                 neighbor,
                 new_node,
                 rail_nodes=[],
-                # rail_node_to_switch={},
             )
             graph.add_edge(
                 node,
                 new_node,
                 rail_nodes=[],
-                # rail_node_to_switch={},
             )
             graph.remove_edge(node, neighbor)
     return graph
@@ -132,12 +130,6 @@ def prune_non_switches(graph: nx.Graph) -> nx.Graph:
         if node_degree == 2 and neighbors_degrees == set([2]):
             prev_node, next_node = list(graph.neighbors(node))
 
-            # rail_node_to_switch = {}
-            # for k in graph.edges[(prev_node, node)]["rail_node_to_switch"].keys():
-            #     rail_node_to_switch[k] = next_node
-            # for k in graph.edges[(next_node, node)]["rail_node_to_switch"].keys():
-            #     rail_node_to_switch[k] = prev_node
-
             graph.add_edge(
                 prev_node,
                 next_node,
@@ -146,12 +138,6 @@ def prune_non_switches(graph: nx.Graph) -> nx.Graph:
                     *graph.edges[(prev_node, node)]["rail_nodes"],
                     *graph.edges[(node, next_node)]["rail_nodes"],
                 ],
-                # rail_node_to_switch={
-                #     (prev_node, node): next_node,
-                #     (next_node, node): prev_node,
-                #     # add all previous maps but pointing at the most outer ones
-                #     **rail_node_to_switch,
-                # },
             )
             graph.remove_edge(prev_node, node)
             graph.remove_edge(node, next_node)
@@ -209,9 +195,9 @@ def generate_local_switch_graphs(graph: nx.Graph) -> nx.Graph:
                 continue
             visited.add(current_node)
             visited.add(next_node)
-            node_pos = graph.nodes[node]["pos"]
-            current_node_pos = graph.nodes[current_node]["pos"]
-            next_node_pos = graph.nodes[next_node]["pos"]
+            node_pos = graph.nodes[node]["position"]
+            current_node_pos = graph.nodes[current_node]["position"]
+            next_node_pos = graph.nodes[next_node]["position"]
 
             train_facing = tuple(np.sign((node_pos - current_node_pos)).tolist())
             train_going = tuple(np.sign((next_node_pos - node_pos)).tolist())

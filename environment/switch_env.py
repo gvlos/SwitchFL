@@ -36,9 +36,7 @@ class SwitchEnv(AECEnv):
 
         self.switch_network_graph = self._create_switch_graph(self.rail_env)
 
-        pos = self.switch_network_graph.nodes.data(data="pos")
-        pos = {k: v for k, v in pos}
-    
+        
         self._node_df = self.get_node_df(self.switch_network_graph)
 
         # switch agents
