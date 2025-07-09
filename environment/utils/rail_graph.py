@@ -84,17 +84,33 @@ def create_rail_graph(env: RailEnv, cmap="tab20") -> nx.Graph:
 
 
 def insert_switch_proximity_nodes(graph: nx.Graph) -> nx.Graph:
-    new_nodes = set()
+    # get neighbors and order them:
+    # East  -> X.0
+    # North -> X.1
+    # West  -> X.2
+    # South -> X.3
+    direction_index = {
+        (0, 1): 0.1,
+        (-1, 0): 0.2,
+        (0, -1): 0.3,
+        (1, 0): 0.4,
+    }
+
     for node in list(graph.nodes):
         node_degree = graph.degree(node)
         if node_degree == 2:
+            # node is not a switch
             continue
 
         # add surrounding nodes
         for idx, neighbor in enumerate(list(graph.neighbors(node))):
-            new_node = (node[0] + 0.1 * (idx + 1), node[1] + 0.1 * (idx + 1))
-            new_nodes.add(new_node)
-            pos = (graph.nodes[neighbor]["pos"] + 2 * graph.nodes[node]["pos"]) / 3
+            rel_pos = tuple(np.array(neighbor).astype(int) - np.array(node))
+            name_suffix = direction_index[rel_pos]
+            new_node = (int(node[0]) + name_suffix, int(node[1]) + name_suffix)
+
+            pos = (
+                graph.nodes[neighbor]["position"] + 2 * graph.nodes[node]["position"]
+            ) / 3
             switch_color = graph.nodes[node]["node_color"]
             switch_id = graph.nodes[node]["switch_id"]
             graph.add_node(
@@ -227,6 +243,16 @@ def add_rail_actions(graph: nx.Graph) -> nx.Graph:
         - key: where the action leads to
         - value: action sequence
 
+    Assume port-node naming within switch node x:
+
+                N
+            (x.1,x.1)
+        W       |        E
+    (x.2,x.2)---+----(x.0,x.0)
+                |
+            (x.3,x.3)
+                S
+
     Example:
     >>> switch_graph = add_rail_actions(switch_graph)
     >>> switch_graph.nodes.data('actions')[<source-node>][<target-node>]
@@ -239,22 +265,26 @@ def add_rail_actions(graph: nx.Graph) -> nx.Graph:
     """
     actions = {}
 
-    for i, incoming in enumerate(graph.nodes):
-        facing_index = (i + 2) % 4  # Opposite direction (facing)
+    for i, incoming in enumerate(graph.nodes):      
+        incoming_decimal = round((incoming[0] - int(incoming[0])) * 10)
+        # transform [1, 2, 3, 4] -> [0, 1, 2, 3] (modulo operation)
+        incoming_decimal -= 1
         actions[incoming] = {"actions": {}}  # graph.nodes.data()[incoming]
         for j, target in enumerate(graph.nodes):
             if incoming == target or target not in graph.neighbors(incoming):
                 continue  # Cannot go back to where you came from
-            relative = (j - facing_index) % 4
+            target_decimal = round((target[0] - int(target[0])) * 10)  # x.y -> y
+            target_decimal -= 1
+
             action = [RailEnvActions.MOVE_FORWARD]  # enter switch
-            if relative == 0:
-                action.append(RailEnvActions.MOVE_FORWARD)
-            elif relative == 1:
+            if (incoming_decimal + 1) % 4 == target_decimal:  #
                 action.append(RailEnvActions.MOVE_RIGHT)
-            elif relative == 3:
+            elif (incoming_decimal + 2) % 4 == target_decimal:
+                action.append(RailEnvActions.MOVE_FORWARD)
+            elif (incoming_decimal + 3) % 4 == target_decimal:
                 action.append(RailEnvActions.MOVE_LEFT)
             else:
-                action = "invalid"  # Shouldn't occur
+                raise ValueError(f"No action possible to go from: {incoming=} to {target=}")
             actions[incoming]["actions"][target] = action
 
     nx.set_node_attributes(G=graph, values=actions)
