@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, List, Tuple
 
 import networkx as nx
@@ -97,7 +98,7 @@ class MultiDiscreteSwitchObsSpace(Space):
     def contains(self, x):
         x = np.array(x)
         if x.shape != self._shape:
-            print(f"shape is not correct: given={x.shape}, expected={self._shape}")
+            logging.debug(f"shape is not correct: given={x.shape}, expected={self._shape}")
             return False
 
         indices = [
@@ -108,13 +109,13 @@ class MultiDiscreteSwitchObsSpace(Space):
         semaphore, stations, delay = np.split(x, np.cumsum(indices))[:-1]
         # break it up
         if not self.semaphore_space.contains(semaphore):
-            print(f"semaphore space does not contain: {semaphore}")
+            logging.debug(f"semaphore space does not contain: {semaphore}")
             return False
         if not self.station_space.contains(stations):
-            print(f"station_space space does not contain: {stations}")
+            logging.debug(f"station_space space does not contain: {stations}")
             return False
         if not self.delay_space.contains(delay):
-            print(f"delay space does not contain: {x[-self.delay_space.shape[0] :]}")
+            logging.debug(f"delay space does not contain: {delay}")
             return False
 
         return True
@@ -126,7 +127,14 @@ class MultiDiscreteSwitchObsSpace(Space):
 
     def human_format(self, sample: np.ndarray) -> Dict[str, np.ndarray]:
         assert self.contains(sample)
-        return {"train_targets": sample}
+        indices = [
+            self.semaphore_space.shape[0],
+            self.station_space.shape[0],
+            self.delay_space.shape[0],
+        ]
+        semaphore, stations, delay = np.split(sample, np.cumsum(indices))[:-1]
+        
+        return {"semaphore": semaphore, "train_targets": stations.reshape(-1, 2), "delay": delay}
 
 
 def build_switch_to_rail_actions(
