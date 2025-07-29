@@ -152,7 +152,7 @@ Each switch decides which path to activate. The action space is:
 Each discrete action corresponds to piping a train from one port to another if applicable. This results in different amount of available actions for an agent: 
 1. **T-Crossing**: 4
 2. **Standard Crossing**: 2
-3. **Single Turn Switch**: 6
+3. **Single Turn Switch**: 6    
 4. **Double Turn Switch**: 8
 
 For more details please refer to the [`switch definitions`](switchfl/switch_agents.py) or print the `actions` field of an `_Switch` instance. 
@@ -190,7 +190,7 @@ We welcome contributions! To contribute:
 5. Open a Pull Request.
 
 
-## 📄 License
+## License
 
 MIT License. See [LICENSE](./LICENSE) for details.
 
@@ -208,9 +208,8 @@ If you use this code in your research, please cite:
   url={https://github.com/RobinU434/SwitchFL}
 }
 ```
----
 
-## 📎 Related Projects
+## Related Projects
 
 * [Flatland](https://flatland.aicrowd.com/getting-started/env.html)
 * [PettingZoo](https://pettingzoo.farama.org/)
