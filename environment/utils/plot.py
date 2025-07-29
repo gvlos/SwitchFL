@@ -10,6 +10,6 @@ def plot_rail_network(rail_graph: nx.Graph):
         node_color=dict(rail_graph.nodes.data(data="node_color")).values(),
         edge_color="gray",
         node_size=3,
-        font_size=6,
+        font_size=5,
     )
     plt.show()
