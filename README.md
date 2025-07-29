@@ -155,7 +155,7 @@ Each discrete action corresponds to piping a train from one port to another if a
 3. **Single Turn Switch**: 6    
 4. **Double Turn Switch**: 8
 
-For more details please refer to the [`switch definitions`](switchfl/switch_agents.py) or print the `actions` field of an `_Switch` instance. 
+For more details please refer to the [`switch definitions`](switchfl/switch_agents.py) or print `actions` of an `_Switch`    instance. 
 
 ## Rendering
 
