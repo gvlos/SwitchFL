@@ -2,8 +2,8 @@ from itertools import product
 from typing import Any, Callable, List, Tuple       
 
 import pytest
-from environment.utils.rail_graph import add_rail_actions
-from environment.utils.switch_agent import build_rail_action_map
+from switchfl.utils.rail_graph import add_rail_actions
+from switchfl.utils.switch_agent import build_rail_action_map
 import networkx as nx
 from flatland.envs.rail_env import RailEnvActions
 

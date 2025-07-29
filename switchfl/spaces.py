@@ -7,8 +7,8 @@ from flatland.envs.rail_env import RailEnvActions
 from gymnasium import spaces
 from gymnasium.spaces import MultiDiscrete, Space
 
-from environment.utils.rail_graph import add_rail_actions
-from environment.utils.switch_agent import build_rail_action_map
+from switchfl.utils.rail_graph import add_rail_actions
+from switchfl.utils.switch_agent import build_rail_action_map
 
 
 class TargetSpace(MultiDiscrete):

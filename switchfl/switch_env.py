@@ -13,10 +13,10 @@ from flatland.envs.step_utils.states import TrainState
 from flatland.utils.rendertools import AgentRenderVariant
 from pettingzoo import AECEnv
 
-from environment import NodeId, TrainAgentHandle
-from environment.observer import StandardObserver, _Observer
-from environment.rail_network import RailNetwork
-from environment.utils.naming import name2switch_id, switch_id2name
+from switchfl import NodeId, TrainAgentHandle
+from switchfl.observer import StandardObserver, _Observer
+from switchfl.rail_network import RailNetwork
+from switchfl.utils.naming import name2switch_id, switch_id2name
 
 
 class _SwitchEnv:

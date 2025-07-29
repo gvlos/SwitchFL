@@ -6,10 +6,10 @@ import pandas as pd
 from flatland.envs.rail_env import RailEnv, RailEnvActions
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.agent_utils import Grid4TransitionsEnum
-from environment import NodeId, PortId, TrainAgentHandle
-from environment.switch_agents import _Switch, Switch2, get_switch_type
-from environment.utils.naming import get_node_id_on_port_id, switch_id2name
-from environment.utils.rail_graph import (
+from switchfl import NodeId, PortId, TrainAgentHandle
+from switchfl.switch_agents import _Switch, Switch2, get_switch_type
+from switchfl.utils.naming import get_node_id_on_port_id, switch_id2name
+from switchfl.utils.rail_graph import (
     create_rail_graph,
     generate_local_switch_graphs,
     insert_switch_proximity_nodes,

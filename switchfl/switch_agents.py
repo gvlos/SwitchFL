@@ -9,9 +9,9 @@ from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnvActions
 from gymnasium import Space, spaces
 
-from environment import NodeId, PortId, TrainAgentHandle
-from environment.utils.rail_graph import add_rail_actions
-from environment.utils.switch_agent import build_rail_action_map
+from switchfl import NodeId, PortId, TrainAgentHandle
+from switchfl.utils.rail_graph import add_rail_actions
+from switchfl.utils.switch_agent import build_rail_action_map
 
 
 def build_switch_to_rail_actions(

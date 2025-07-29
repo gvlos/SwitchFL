@@ -2,7 +2,7 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.line_generators import sparse_line_generator
 import json
-from environment.switch_env import ASyncSwitchEnv
+from switchfl.switch_env import ASyncSwitchEnv
 
 random_seed = 41
 rail_env = RailEnv(

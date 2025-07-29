@@ -1,6 +1,6 @@
 from typing import Any
 
-from environment import NodeId, PortId
+from switchfl import NodeId, PortId
 
 
 def get_switch_id(identifier: Any) -> str:

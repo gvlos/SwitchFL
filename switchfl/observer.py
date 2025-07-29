@@ -1,15 +1,14 @@
 from abc import ABC, abstractmethod
-import json
 import logging
 from typing import Any, Dict, Tuple
 
 from gymnasium import Space
 from numpy import ndarray
 
-from environment.rail_network import RailNetwork
-from environment.spaces import MultiDiscreteSwitchObsSpace
-from environment.switch_agents import _Switch
-from environment.utils.naming import name2switch_id
+from switchfl.rail_network import RailNetwork
+from switchfl.spaces import MultiDiscreteSwitchObsSpace
+from switchfl.switch_agents import _Switch
+from switchfl.utils.naming import name2switch_id
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 import numpy as np
