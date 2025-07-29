@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import json
 import logging
 from typing import Any, Dict, Tuple
 
@@ -98,21 +99,28 @@ class StandardObserver(_Observer):
         delay = []
 
         train_at_ports = {
-            rail_network.get_port_on_position(train.position): train
-            for train in rail_env.agents
+            rail_network.get_trains_next_port(train): train for train in rail_env.agents
         }
+        print(rail_network._train2next_port)
+        train_counter = 0  # debugging
         for port in switch.get_port_nodes():
+            print(port, switch.switch_graph.nodes.data("rail_prev_node")[port])
             semaphore.append(switch.semaphores[port])
 
             train = train_at_ports.get(port)
             if train is None:
+                # train is not at requested port        
                 delay.append(-1)
                 target.extend([-1, -1])  # 2D coordinates
             else:
-                delay.append(
+                delay.append(               
                     self._discretize_delay(train, self._compute_delay(rail_env, train))
                 )
                 target.extend(train.target)
+                train_counter += 1
+
+        if train_counter == 0: # there is no train at the port -> there is no point for observing it 
+            print("Bug detected.")  
 
         semaphore = np.array(semaphore).astype(int)
         target = np.array(target).astype(int)

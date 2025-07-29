@@ -1,25 +1,26 @@
 import functools
-from collections import OrderedDict
 import logging
+from collections import OrderedDict
 from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
+from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnv, RailEnvActions
 from flatland.envs.step_utils.env_utils import apply_action_independent
+from flatland.envs.step_utils.states import TrainState
 from flatland.utils.rendertools import AgentRenderVariant
 from pettingzoo import AECEnv
 
 from environment import NodeId, TrainAgentHandle
-from environment.observer import _Observer, StandardObserver
+from environment.observer import StandardObserver, _Observer
 from environment.rail_network import RailNetwork
 from environment.utils.naming import name2switch_id, switch_id2name
 
 
 class _SwitchEnv:
-    metadata = {
-        "render_mode": ["human", "rgb_array", None]
-    }
+    metadata = {"render_mode": ["human", "rgb_array", None]}
 
     def __init__(
         self,
@@ -70,7 +71,7 @@ class _SwitchEnv:
             node_id, seed=self.seed
         )
         return action_space
-    
+
     def reset(self, seed=None, options=None):
         obs, info = self.rail_env.reset()
         self.rail_network.reset()
@@ -99,24 +100,45 @@ class _SwitchEnv:
     def render(self):
         if self.render_mode is None:
             return
-        
+
         rgb = self.rail_env.render(
             agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True
         )
         if self.render_mode == "rgb_array":
             return rgb
         elif self.render_mode == "human":
-            plt.imshow(rgb)
-            plt.axis("off")
+            fig, (ax1, ax2) = plt.subplots(ncols=2)
+            ax1.imshow(rgb)
+            nx.draw(
+                self.rail_network.rail_graph.to_undirected(),
+                self.rail_network.rail_graph.nodes.data("position"),
+                with_labels=True,
+                node_color=dict(
+                    self.rail_network.rail_graph.nodes.data(data="node_color")
+                ).values(),
+                edge_color="gray",
+                node_size=3,
+                font_size=5,
+                ax=ax2,
+            )
+            ax1.axis("off")
+            ax2.axis("off")
             plt.show()
-            
-    def obs2human_format(self, agent: str, observation: Any) -> Dict[str, Any]:
+
+    def obs2human(self, agent: str, observation: Any) -> Dict[str, Any]:
         obs_space = self.observation_space(agent)
         human_format = getattr(obs_space, "human_format", None)
         if not callable(human_format):
-            logging.error(f"Observation space: {obs_space} has not method to convert observation into a human format.")
-            return    
+            logging.error(
+                f"Observation space: {obs_space} has not method to convert observation into a human format."
+            )
+            return
         return human_format(observation)
+
+    def obs2json(self, agent: str, observation: Any) -> Dict[str, Any]:
+        obs = self.obs2human(agent, observation)
+        obs = {k: v.tolist() for k, v in obs.items()}
+        return obs
 
     def _apply_action(self, agent_selection: str, action: int) -> NodeId:
         """get train actions and update semaphores at the corresponding switches
@@ -133,22 +155,26 @@ class _SwitchEnv:
         ), "Invalid action performed"
 
         node_id = name2switch_id(agent_selection)
-        train_actions = self.rail_network.get_train_actions(
+        current_switch = self.rail_network.get_switch_on_position(node_id)
+        in_port, out_port = current_switch.action_outcomes[action]
+        
+        # update train_action_plan such that move_trains step can work it down
+        moving_train, train_actions = self.rail_network.get_train_actions(
             node_id, action, self.rail_env.agents
         )
-        # update train_action_plan such that move_trains step can work it down
         for train_agent_handle in train_actions.keys():
             self.train_action_plan[train_agent_handle].extend(
                 train_actions[train_agent_handle]
             )
+        
+        # transition a train if there is actually a train moving
+        if isinstance(moving_train, TrainAgent):
+            # update rail_network how trains are transitioned from edge to edge
+            next_switch = self.rail_network.transition_train(moving_train, in_port, out_port)
+        else:
+            next_switch = current_switch
 
-        # move semaphores
-        source, target = self.rail_network.get_switch_on_position(
-            node_id
-        ).action_outcomes[action]
-        self.rail_network.transition_semaphore(source, target)
-        next_switch = self.rail_network.get_neighbor_switch(target).id
-        return next_switch
+        return next_switch.id
 
     def _move_trains(self):
         # NOTE: the time when the train departures is already taken into account
@@ -184,16 +210,10 @@ class _SwitchEnv:
             # NOTE: after resetting the environment all trains are in a standstill
             # -> they have to be moved first after the reset
             self._move_trains()
-
-            # move trains until they arrive on the grid -> needed after initialization
-            current_positions = [train.position for train in self.rail_env.agents]
-            current_positions = list(filter(lambda x: x is not None, current_positions))
-            if len(current_positions) == 0:
-                continue
-
             self._check_active_switch()
 
         # remove duplicates in agents but maintaining order
+        print("active_switches: ", self.active_switch_agents)
         self.active_switch_agents = list(
             OrderedDict.fromkeys(self.active_switch_agents)
         )
@@ -202,12 +222,23 @@ class _SwitchEnv:
         """do simulation step and see if a train enters a switch node
         -> then add the switch to active agents
         """
+
+        # check if a train is ready to depart -> its position on the grid is known
+        current_positions = [
+            train.position
+            for train in self.rail_env.agents
+            if train.position is not None
+        ]
+        if len(current_positions) == 0:
+            # if the train is not on the grid
+            return
+
         for train in self.rail_env.agents:
-            # train is not one the grid yet
-            if train.position is None:
+            # train is not one the grid yet or if it waiting don't execute something on it.
+            if train.position is None or train.state == TrainState.WAITING:
                 continue
 
-            # get next action
+            # get first next action
             if len(self.train_action_plan[train.handle]) > 0:
                 next_action = self.train_action_plan[train.handle][0]
             else:
@@ -221,7 +252,12 @@ class _SwitchEnv:
                 train.direction,
             )
 
-            if self.rail_network.get_switch_on_position(new_pos) is not None:
+            # if with the next action the train has entered a switch add the switch to the active switches
+            if self.rail_network.get_switch_on_position(new_pos) is not None and (
+                train.state == TrainState.READY_TO_DEPART
+                or train.state == TrainState.MOVING
+            ):
+                # use new pos because the switch coordinates are its node_id
                 switch_id = switch_id2name(new_pos)
                 self.active_switch_agents.append(switch_id)
 
@@ -234,20 +270,28 @@ class _SwitchEnv:
         - all trains are already on the grid
         - at least one train is in front of a switch
         """
-
         for train in self.rail_env.agents:
+            print("train_handle: ", train.handle)
             # simulate steps of a train until they arrive at a switch
             # NOTE: yes this is expensive, but only executed once in reset()
             current_pos = train.position
             current_dir = train.direction
+            last_pos = train.old_position
+            last_dir = train.old_direction
             if current_pos is None or current_dir is None:
                 current_pos = train.initial_position
                 current_dir = train.initial_direction
+
             while True:
                 if self.rail_network.get_switch_on_position(current_pos) is not None:
+                    print(
+                        "\tnext_switch:",
+                        self.rail_network.get_switch_on_position(current_pos).id,
+                    )
                     # train on switch
                     break
                 last_pos = current_pos
+                last_dir = current_dir
                 current_pos, current_dir = apply_action_independent(
                     RailEnvActions.MOVE_FORWARD,
                     self.rail_env.rail,
@@ -255,8 +299,12 @@ class _SwitchEnv:
                     current_dir,
                 )
             # last pos corresponds to rail_prev_node
-            port = self.rail_network.get_port_on_position(last_pos)
+            # NOTE: getting the port based on position and direction could be bugged
+            # if the first switch directly is directly behind a turn in the rail
+            port = self.rail_network.get_port_on_position(last_pos, last_dir)
+            print("\tarriving_port: ", port)
             self.rail_network.block_semaphore(port)
+            self.rail_network.set_trains_next_port(train, port)
 
     @property
     def n_steps(self) -> int:
@@ -280,18 +328,19 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
             yield self.agent_selection
 
     def step(self, action) -> Dict[str, Any]:
+        # check if current agent is still operating
         if (
             self.terminations[self.agent_selection]
             or self.truncations[self.agent_selection]
             or action is None
         ):
             # the agent is done
-            return None
+            return {}
 
         next_switch = self._apply_action(self.agent_selection, action)
 
+        # no switches with non processed trains left -> time to move trains
         if len(self.active_switch_agents) == 0:
-            # no switches with non processed trains left -> time to move trains
             self._move_trains_to_switch()
 
         # check for done episode
@@ -302,6 +351,7 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
             }
             self.truncated = True
 
+        # prepare info dict
         post_step_info = {"next_switch": next_switch}
         return post_step_info
 

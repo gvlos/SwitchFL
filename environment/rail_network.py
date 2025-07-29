@@ -1,10 +1,11 @@
 from typing import Dict, List, Tuple
 from gymnasium import Space
 import networkx as nx
+import numpy as np
 import pandas as pd
 from flatland.envs.rail_env import RailEnv, RailEnvActions
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
-
+from flatland.envs.agent_utils import Grid4TransitionsEnum
 from environment import NodeId, PortId, TrainAgentHandle
 from environment.switch_agents import _Switch, Switch2, get_switch_type
 from environment.utils.naming import get_node_id_on_port_id, switch_id2name
@@ -32,7 +33,10 @@ def build_switch_network(rail_network: nx.Graph) -> nx.Graph:
             neighbors = rail_network.neighbors(port)
             neighbor_port_df = df[df.index.isin(neighbors) & (df["switch_id"] != node)]
             edges.add((node, neighbor_port_df["switch_id"].item()))
-            port2neighbor[port] = neighbor_port_df["switch_id"].item()
+            port2neighbor[port] = (
+                neighbor_port_df["switch_id"].item(),
+                neighbor_port_df.index.item(),
+            )
 
         switch = get_switch_type(switch_graph)(node, switch_graph, port2neighbor)
 
@@ -64,8 +68,15 @@ class RailNetwork:
         self.switch_network = build_switch_network(self.rail_graph)
 
         # build lookup dictionaries
-        self._pos2port: Dict[Tuple[int, int], PortId] = {
-            pos: port for port, pos in self.rail_graph.nodes.data("rail_prev_node")
+        self._dir2port_idx = {
+            1.0: Grid4TransitionsEnum.WEST.value,
+            2.0: Grid4TransitionsEnum.SOUTH.value,
+            3.0: Grid4TransitionsEnum.EAST.value,
+            4.0: Grid4TransitionsEnum.NORTH.value,
+        }
+        self._pos_dir2port: Dict[Tuple[Tuple[int, int], int], PortId] = {
+            (pos, self._dir2port_idx[round(port[0] - int(port[0]), 1) * 10]): port
+            for port, pos in self.rail_graph.nodes.data("rail_prev_node")
         }
         """rail position before entering a node"""
         self._pos2switch: Dict[Tuple[int, int], _Switch] = {
@@ -73,33 +84,57 @@ class RailNetwork:
             for switch_node, switch in self.switch_network.nodes.data("switch_cls")
         }
         """switch position to switch class"""
-        
+
+        self._train2next_port: Dict[int, PortId] = {
+            train.handle: None for train in rail_env.agents
+        }
+        """get the next port the agent is going to enter. 
+        This dictionary changes after a train transition got determined by an agent."""
+
     def reset(self):
         # reset all switches
-        for node, switch in self.switch_network.nodes.data("switch_cls"):
+        for _, switch in self.switch_network.nodes.data("switch_cls"):
             switch: _Switch
             switch.reset()
-        
+
+        self._train2next_port: Dict[int, PortId] = {
+            handle: None for handle in self._train2next_port.keys()
+        }
 
     def get_switch_on_position(self, switch: NodeId) -> _Switch | None:
-        """get switch class for the corresponding position of the switch
+        """get switch class for the corresponding position of the switch.
+        This method only returns a switch if the trains is actually on the switch tile.
+        Otherwise it returns None.
 
         Args:
             switch (NodeId): position in rail grid
 
         Returns:
-            _Switch | None: if given node does not belong to a switch return None. Otherwise the switch object
+            _Switch | None: If the given node does not belong to a switch return None.
+                Otherwise the switch object.
         """
         if switch not in self.switch_network.nodes:
             return None
         return self.switch_network.nodes.data("switch_cls")[switch]
 
-    def get_neighbor_switch(self, port: PortId) -> _Switch:
+    def get_neighbor_switch(self, port: PortId) -> Tuple[_Switch, PortId]:
+        """get the neighbor switch instance and its port assuming you are
+        leaving the given port and end up at the next switch
+
+        Args:
+            port (PortId): out port of a switch
+
+        Returns:
+            Tuple[_Switch, PortId]: _Switch object of the next switch node and the
+                PortId of the port though you will ender the switch node.
+        """
         node_id = get_node_id_on_port_id(port)
         switch = self.get_switch_on_position(node_id)
-        neighbor_node_id = switch.port2neighbor[port]
+        neighbor_node_id, neighbor_port_id = switch.port2neighbor[port]
         neighbor_switch = self.get_switch_on_position(neighbor_node_id)
-        return neighbor_switch
+        if neighbor_switch is None:
+            neighbor_port_id = None
+        return neighbor_switch, neighbor_port_id
 
     def get_switch_on_port(self, port: PortId) -> _Switch:
         """get the switch if the position is a node before entering a switch node
@@ -113,43 +148,114 @@ class RailNetwork:
         node_id = get_node_id_on_port_id(port)
         return self._pos2switch[node_id]
 
-    def get_port_on_position(self, position: Tuple[int, int]) -> PortId | None:
+    def get_port_on_position(
+        self, position: Tuple[int, int], direction: Grid4TransitionsEnum = None
+    ) -> PortId | None:
         """get the port node if the position is a node before entering a switch node
 
         Args:
             position (Tuple[int, int]): position in rail network
+            direction (Grid4TransitionsEnum, optional): which direction the train is going.
+                Is need if there are multiple switches a train can enter from a
+                single position (neighboring switches for instance). Defaults to None
 
         Returns:
             PortId | None: either a port or None, if the given position does not belong to a switch
         """
-        return self._pos2port.get(position)
+        if direction is not None:
+            return self._pos_dir2port.get((position, direction))
+
+        # only works if there is only one node neighbor to the current position
+        ports = []
+        for direction in self._dir2port_idx.values():
+            port = self._pos_dir2port.get((position, direction))
+            if port is not None:
+                ports.append(port)
+
+        if len(ports) > 1:
+            raise ValueError(f"Multiple {ports=} reachable from given {position=}")
+        elif len(ports) == 1:
+            return ports[0]
+        else:
+            return None
 
     def free_semaphore(self, port: PortId):
+        """Indicate that there is not train anymore incoming from the given port
+
+        Args:
+            port (PortId): which port is free again?
+        """
         switch = self.get_switch_on_port(port)
         switch.free_port(port)
         node_id = get_node_id_on_port_id(port)
         self.switch_network.update(nodes={node_id: {"switch_cls": switch}})
 
     def block_semaphore(self, port: PortId):
+        """Indicate that there is a train incoming from the given port
+
+        Args:
+            port (PortId): which port is going to be blocked.
+        """
         switch = self.get_switch_on_port(port)
         switch.block_port(port)
         node_id = get_node_id_on_port_id(port)
         self.switch_network.update(nodes={node_id: {"switch_cls": switch}})
+        
+    
+    def transition_train(self, train: TrainAgent, in_port: PortId, out_port: PortId) -> _Switch:
+        """
+        update semaphores and information at which switch the train will arrive next
+        
+        Args:
+            train (TrainAgent): train entering the switch
+            in_port (PortId): the port a train entered the switch
+            out_port (PortId): the port the train will leave the switch
+            
+        Returns:
+            _Switch: instance of the next switch the train will arrive at after leaving on given out_port
+        """
+        in_switch = np.array(in_port, dtype=int)
+        out_switch = np.array(out_port, dtype=int)
+        assert (in_switch == out_switch).prod(), f"both given ports have to belong to the same switch: {in_switch} != {out_switch}"
+        
+        # find next switch with next port 
+        next_switch, target_port = self.get_neighbor_switch(out_port)
+        # assign the semaphores 
+        self.transition_semaphore(in_port, target_port)
+        # the next port in self._train2next_port
+        self.set_trains_next_port(train, target_port)
+        
+        return next_switch
 
     def transition_semaphore(self, source: PortId, target: PortId):
+        """handle semaphore freeing and blocking if a train is moving from the given source port (source) and moving to the outgoing port.
+
+        Args:
+            source (PortId): the port a train entered a switch
+            target (PortId): the port through a train will enter next
+        """
         self.free_semaphore(source)
         self.block_semaphore(target)
 
-        # account for the case where the next switch is a simple intersections.
+        # TODO account for the case where the next switch is a simple intersections.
         # In this case also the next semaphores have to be switched on
-        if isinstance(self.get_neighbor_switch(target), Switch2):
-            # find the next switch after this one
-            # TODO
-            pass
 
     def get_train_actions(
         self, node: NodeId, action: int, train_agents: List[TrainAgent]
-    ) -> Dict[TrainAgentHandle, List[RailEnvActions]]:
+    ) -> Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+        """get the sequence of train actions from switch action and the train which is moving / transitioning over the switch
+
+        Args:
+            node (NodeId): node_id of node from where to get the actions from
+            action (int): action index to get the train actions from
+            train_agents (List[TrainAgent]): list of all train agents on grid
+
+        Returns:
+            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]: 
+                - train agent which is moving / crossing the switch. 
+                    If all currently positioned trains have to wait -> return None.
+                - For each train at the switch return actions to perform
+        """
         switch = self._pos2switch[node]
         return switch.get_train_action(action, train_agents)
 
@@ -162,3 +268,9 @@ class RailNetwork:
     def get_switch_action_space(self, node: NodeId, seed: int = None) -> Space:
         switch = self.get_switch_on_position(node)
         return switch.get_action_space(seed=seed)
+
+    def set_trains_next_port(self, train: TrainAgent, port: PortId):
+        self._train2next_port[train.handle] = port
+
+    def get_trains_next_port(self, train: TrainAgent) -> PortId:
+        return self._train2next_port[train.handle]

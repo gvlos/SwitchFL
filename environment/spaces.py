@@ -50,8 +50,8 @@ class TargetSpace(MultiDiscrete):
 class MultiDiscreteSwitchObsSpace(Space):
     def __init__(
         self,
-        n_gaits: int,
-        rail_grid_shape: Tuple[int, int],
+        n_gaits: int,  # how many ports are there
+        rail_grid_shape: Tuple[int, int],  # for target space
         n_delay_levels: int = 3,
         seed=None,
     ):
@@ -134,7 +134,7 @@ class MultiDiscreteSwitchObsSpace(Space):
         ]
         semaphore, stations, delay = np.split(sample, np.cumsum(indices))[:-1]
         
-        return {"semaphore": semaphore, "train_targets": stations.reshape(-1, 2), "delay": delay}
+        return {"semaphore": semaphore, "train_targets": stations.reshape(-1, 2), "delay": delay, }
 
 
 def build_switch_to_rail_actions(

@@ -38,7 +38,7 @@ class _Switch(ABC):
         self,
         id: NodeId,
         switch_graph: nx.Graph,
-        port2neighbor: Dict[PortId, NodeId] = None,
+        port2neighbor: Dict[PortId, Tuple[NodeId, PortId]] = None,
     ):
         self.id = id
         self.switch_graph = switch_graph
@@ -103,7 +103,7 @@ class _Switch(ABC):
 
     def get_train_action(
         self, action: int, train_agents: List[TrainAgent]
-    ) -> Dict[TrainAgentHandle, List[RailEnvActions]]:
+    ) -> Tuple[TrainAgent | None, Dict[TrainAgentHandle, List[RailEnvActions]]]:
         """For the given trains which are about to enter this switch, return the actions sequences for each train
 
         Args:
@@ -111,7 +111,10 @@ class _Switch(ABC):
             train_agents (List[TrainAgent]): all trains on the grid
 
         Returns:
-            Dict[TrainAgentHandle, List[RailEnvActions]]: For each train at the switch return actions to perform
+            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]: 
+                - train agent which is moving / crossing the switch. 
+                    If all currently positioned trains have to wait -> return None.
+                - For each train at the switch return actions to perform
         """
         _, target_port = self.action_outcomes[action]
         if self.semaphores[target_port]:
@@ -120,20 +123,24 @@ class _Switch(ABC):
             )
 
         result = {}
+        moving_train = None
         for train_agent in train_agents:
             port_node = self._pos2port.get(train_agent.position)
             if port_node is None:
                 # train is not at a port node
                 continue
-            result[train_agent.handle] = self.actions[action][port_node]
-
+            actions = self.actions[action][port_node]
+            result[train_agent.handle] = actions
+            if actions[0] != RailEnvActions.STOP_MOVING:
+                moving_train = train_agent
+            
         # If only one train and it is STOP_MOVING
         if (
             len(result) == 1
             and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
         ):
             result[next(iter(result))] = [RailEnvActions.STOP_MOVING]
-        return result
+        return moving_train, result
 
     def get_port_nodes(self) -> List[PortId]:
         return list(self._port_nodes.values())
