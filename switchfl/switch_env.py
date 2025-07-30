@@ -8,7 +8,7 @@ import networkx as nx
 import numpy as np
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnv, RailEnvActions
-from flatland.envs.step_utils.env_utils import apply_action_independent
+
 from flatland.envs.step_utils.states import TrainState
 from flatland.utils.rendertools import AgentRenderVariant
 from pettingzoo import AECEnv
@@ -157,7 +157,7 @@ class _SwitchEnv:
         node_id = name2switch_id(agent_selection)
         current_switch = self.rail_network.get_switch_on_position(node_id)
         in_port, out_port = current_switch.action_outcomes[action]
-        
+
         # update train_action_plan such that move_trains step can work it down
         moving_train, train_actions = self.rail_network.get_train_actions(
             node_id, action, self.rail_env.agents
@@ -166,11 +166,13 @@ class _SwitchEnv:
             self.train_action_plan[train_agent_handle].extend(
                 train_actions[train_agent_handle]
             )
-        
+
         # transition a train if there is actually a train moving
         if isinstance(moving_train, TrainAgent):
             # update rail_network how trains are transitioned from edge to edge
-            next_switch = self.rail_network.transition_train(moving_train, in_port, out_port)
+            next_switch = self.rail_network.transition_train(
+                moving_train, in_port, out_port
+            )
         else:
             next_switch = current_switch
 
@@ -193,9 +195,12 @@ class _SwitchEnv:
                 action[handle] = self.train_action_plan[handle].pop(0)
 
         # do rail env step
-        self.train_obs, self.train_reward, self.train_done, self.train_info = (
-            self.rail_env.step(action)
-        )
+        (
+            self.train_obs,
+            self.train_reward,
+            self.train_done,
+            self.train_info,
+        ) = self.rail_env.step(action)
         self.rail_env_time += 1
 
         # check for all trains being done
@@ -245,20 +250,25 @@ class _SwitchEnv:
                 next_action = RailEnvActions.MOVE_FORWARD
 
             # do a simulation step an get the next switch if needed
-            new_pos, _ = apply_action_independent(
+            (
+                new_cell_valid,
+                new_direction,
+                new_position,
+                transition_valid,
+                preprocessed_action,
+            ) = self.rail_env.rail.check_action_on_agent(
                 next_action,
-                self.rail_env.rail,
                 train.position,
                 train.direction,
             )
-
+           
             # if with the next action the train has entered a switch add the switch to the active switches
-            if self.rail_network.get_switch_on_position(new_pos) is not None and (
+            if self.rail_network.get_switch_on_position(new_position) is not None and (
                 train.state == TrainState.READY_TO_DEPART
                 or train.state == TrainState.MOVING
             ):
                 # use new pos because the switch coordinates are its node_id
-                switch_id = switch_id2name(new_pos)
+                switch_id = switch_id2name(new_position)
                 self.active_switch_agents.append(switch_id)
 
     def _init_semaphores(self):
@@ -274,30 +284,39 @@ class _SwitchEnv:
             print("train_handle: ", train.handle)
             # simulate steps of a train until they arrive at a switch
             # NOTE: yes this is expensive, but only executed once in reset()
-            current_pos = train.position
-            current_dir = train.direction
+            current_position = train.position
+            current_direction = train.direction
             last_pos = train.old_position
             last_dir = train.old_direction
-            if current_pos is None or current_dir is None:
-                current_pos = train.initial_position
-                current_dir = train.initial_direction
+            if current_position is None or current_direction is None:
+                current_position = train.initial_position
+                current_direction = train.initial_direction
 
             while True:
-                if self.rail_network.get_switch_on_position(current_pos) is not None:
+                if (
+                    self.rail_network.get_switch_on_position(current_position)
+                    is not None
+                ):
                     print(
                         "\tnext_switch:",
-                        self.rail_network.get_switch_on_position(current_pos).id,
+                        self.rail_network.get_switch_on_position(current_position).id,
                     )
                     # train on switch
                     break
-                last_pos = current_pos
-                last_dir = current_dir
-                current_pos, current_dir = apply_action_independent(
+                last_pos = current_position
+                last_dir = current_direction
+                (
+                    new_cell_valid,
+                    current_direction,
+                    current_position,
+                    transition_valid,
+                    preprocessed_action,
+                ) = self.rail_env.rail.check_action_on_agent(
                     RailEnvActions.MOVE_FORWARD,
-                    self.rail_env.rail,
-                    current_pos,
-                    current_dir,
+                    current_position,
+                    current_direction,
                 )
+
             # last pos corresponds to rail_prev_node
             # NOTE: getting the port based on position and direction could be bugged
             # if the first switch directly is directly behind a turn in the rail
