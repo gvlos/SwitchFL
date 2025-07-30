@@ -200,31 +200,34 @@ class RailNetwork:
         switch.block_port(port)
         node_id = get_node_id_on_port_id(port)
         self.switch_network.update(nodes={node_id: {"switch_cls": switch}})
-        
-    
-    def transition_train(self, train: TrainAgent, in_port: PortId, out_port: PortId) -> _Switch:
+
+    def transition_train(
+        self, train: TrainAgent, in_port: PortId, out_port: PortId
+    ) -> _Switch:
         """
         update semaphores and information at which switch the train will arrive next
-        
+
         Args:
             train (TrainAgent): train entering the switch
             in_port (PortId): the port a train entered the switch
             out_port (PortId): the port the train will leave the switch
-            
+
         Returns:
             _Switch: instance of the next switch the train will arrive at after leaving on given out_port
         """
         in_switch = np.array(in_port, dtype=int)
         out_switch = np.array(out_port, dtype=int)
-        assert (in_switch == out_switch).prod(), f"both given ports have to belong to the same switch: {in_switch} != {out_switch}"
-        
-        # find next switch with next port 
+        assert (
+            in_switch == out_switch
+        ).prod(), f"both given ports have to belong to the same switch: {in_switch} != {out_switch}"
+
+        # find next switch with next port
         next_switch, target_port = self.get_neighbor_switch(out_port)
-        # assign the semaphores 
+        # assign the semaphores
         self.transition_semaphore(in_port, target_port)
         # the next port in self._train2next_port
         self.set_trains_next_port(train, target_port)
-        
+
         return next_switch
 
     def transition_semaphore(self, source: PortId, target: PortId):
@@ -251,8 +254,8 @@ class RailNetwork:
             train_agents (List[TrainAgent]): list of all train agents on grid
 
         Returns:
-            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]: 
-                - train agent which is moving / crossing the switch. 
+            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+                - train agent which is moving / crossing the switch.
                     If all currently positioned trains have to wait -> return None.
                 - For each train at the switch return actions to perform
         """

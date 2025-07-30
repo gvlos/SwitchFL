@@ -108,18 +108,20 @@ class StandardObserver(_Observer):
 
             train = train_at_ports.get(port)
             if train is None:
-                # train is not at requested port        
+                # train is not at requested port
                 delay.append(-1)
                 target.extend([-1, -1])  # 2D coordinates
             else:
-                delay.append(               
+                delay.append(
                     self._discretize_delay(train, self._compute_delay(rail_env, train))
                 )
                 target.extend(train.target)
                 train_counter += 1
 
-        if train_counter == 0: # there is no train at the port -> there is no point for observing it 
-            print("Bug detected.")  
+        if (
+            train_counter == 0
+        ):  # there is no train at the port -> there is no point for observing it
+            print("Bug detected.")
 
         semaphore = np.array(semaphore).astype(int)
         target = np.array(target).astype(int)

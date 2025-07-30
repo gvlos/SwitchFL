@@ -111,8 +111,8 @@ class _Switch(ABC):
             train_agents (List[TrainAgent]): all trains on the grid
 
         Returns:
-            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]: 
-                - train agent which is moving / crossing the switch. 
+            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+                - train agent which is moving / crossing the switch.
                     If all currently positioned trains have to wait -> return None.
                 - For each train at the switch return actions to perform
         """
@@ -133,7 +133,7 @@ class _Switch(ABC):
             result[train_agent.handle] = actions
             if actions[0] != RailEnvActions.STOP_MOVING:
                 moving_train = train_agent
-            
+
         # If only one train and it is STOP_MOVING
         if (
             len(result) == 1

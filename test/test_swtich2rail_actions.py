@@ -1,5 +1,5 @@
 from itertools import product
-from typing import Any, Callable, List, Tuple       
+from typing import Any, Callable, List, Tuple
 
 import pytest
 from switchfl.utils.rail_graph import add_rail_actions
@@ -84,25 +84,22 @@ def build_intersection(retain_edges: List[int]) -> nx.Graph:
 
 def build_test_data() -> Tuple[Any, List[str]]:
     test_data = [
-        lambda : build_y_crossing(drop_node, drop_edge)
+        lambda: build_y_crossing(drop_node, drop_edge)
         for drop_node, drop_edge in product(range(4), range(3))
     ]
     ids = ["y-crossing"] * len(test_data)
 
-    test_data.append(lambda : build_intersection([]))
+    test_data.append(lambda: build_intersection([]))
     ids.append("intersection-simple")
 
     test_data.extend(
-        [
-            lambda : build_intersection([retain_edge])
-            for retain_edge in range(4)
-        ]
+        [lambda: build_intersection([retain_edge]) for retain_edge in range(4)]
     )
     ids.extend(["intersection-one"] * 4)
 
     test_data.extend(
         [
-            lambda : build_intersection(retain_edge_pair)
+            lambda: build_intersection(retain_edge_pair)
             for retain_edge_pair in [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
         ]
     )
@@ -111,12 +108,14 @@ def build_test_data() -> Tuple[Any, List[str]]:
 
 
 TEST_DATA, ids = build_test_data()
+
+
 @pytest.mark.parametrize("graph_gen_func", TEST_DATA, ids=ids)
 def test_y_switches(graph_gen_func: Callable[[], nx.Graph]):
     switch_graph = graph_gen_func()
     switch_graph = add_rail_actions(switch_graph)
     action_map, outcomes = build_rail_action_map(switch_graph)
-    
+
     assert len(action_map) == 2 * len(switch_graph.edges)
 
     for action, outcome in zip(action_map, outcomes):

@@ -12,13 +12,17 @@ from switchfl.utils.switch_agent import build_rail_action_map
 
 
 class TargetSpace(MultiDiscrete):
-    def __init__(self, height: int, width: int, n_ports: int, dtype = np.int64, seed: int = None):
+    def __init__(
+        self, height: int, width: int, n_ports: int, dtype=np.int64, seed: int = None
+    ):
         # Ranges: [-1, height -1] and [-1, width -1] for each (x, y) pair
         # Offsets: we shift everything up by 1 to fit MultiDiscrete which only supports lower bound = 0
         nvec = np.array(
             [[height + 1, width + 1]] * n_ports
         )  # +1 for including -1 and height/width-1
-        super().__init__(nvec=nvec.flatten(), dtype=dtype, seed=seed)  # flatten to shape (6,)
+        super().__init__(
+            nvec=nvec.flatten(), dtype=dtype, seed=seed
+        )  # flatten to shape (6,)
 
         self.height = height
         self.width = width
@@ -35,7 +39,9 @@ class TargetSpace(MultiDiscrete):
             x = x.reshape(2, -1).T
         if x.shape != (self.n_ports, 2):
             return False
-        return np.all((-1 <= x) & (x[:, [0]] <= self.height) & (x[:, [1]] <= self.width))
+        return np.all(
+            (-1 <= x) & (x[:, [0]] <= self.height) & (x[:, [1]] <= self.width)
+        )
 
     @property
     def is_np_flattenable(self) -> bool:
@@ -75,14 +81,11 @@ class MultiDiscreteSwitchObsSpace(Space):
             np.ones(self.n_gaits) * (self.n_delay_levels + 1),
             seed=seed,
             start=np.ones(self.n_gaits) * (-1),
-            dtype=np.int64
+            dtype=np.int64,
         )
         # of a rail is blocked or if a train can be send onto this rail
         self.semaphore_space = spaces.MultiDiscrete(
-            np.ones(n_gaits) * 2,
-            seed=seed,
-            start=np.zeros(n_gaits),
-            dtype=np.int64
+            np.ones(n_gaits) * 2, seed=seed, start=np.zeros(n_gaits), dtype=np.int64
         )
 
     def sample(self):
@@ -98,7 +101,9 @@ class MultiDiscreteSwitchObsSpace(Space):
     def contains(self, x):
         x = np.array(x)
         if x.shape != self._shape:
-            logging.debug(f"shape is not correct: given={x.shape}, expected={self._shape}")
+            logging.debug(
+                f"shape is not correct: given={x.shape}, expected={self._shape}"
+            )
             return False
 
         indices = [
@@ -133,8 +138,12 @@ class MultiDiscreteSwitchObsSpace(Space):
             self.delay_space.shape[0],
         ]
         semaphore, stations, delay = np.split(sample, np.cumsum(indices))[:-1]
-        
-        return {"semaphore": semaphore, "train_targets": stations.reshape(-1, 2), "delay": delay, }
+
+        return {
+            "semaphore": semaphore,
+            "train_targets": stations.reshape(-1, 2),
+            "delay": delay,
+        }
 
 
 def build_switch_to_rail_actions(

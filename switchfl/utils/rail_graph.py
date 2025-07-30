@@ -265,7 +265,7 @@ def add_rail_actions(graph: nx.Graph) -> nx.Graph:
     """
     actions = {}
 
-    for i, incoming in enumerate(graph.nodes):      
+    for i, incoming in enumerate(graph.nodes):
         incoming_decimal = round((incoming[0] - int(incoming[0])) * 10)
         # transform [1, 2, 3, 4] -> [0, 1, 2, 3] (modulo operation)
         incoming_decimal -= 1
@@ -284,7 +284,9 @@ def add_rail_actions(graph: nx.Graph) -> nx.Graph:
             elif (incoming_decimal + 3) % 4 == target_decimal:
                 action.append(RailEnvActions.MOVE_LEFT)
             else:
-                raise ValueError(f"No action possible to go from: {incoming=} to {target=}")
+                raise ValueError(
+                    f"No action possible to go from: {incoming=} to {target=}"
+                )
             actions[incoming]["actions"][target] = action
 
     nx.set_node_attributes(G=graph, values=actions)

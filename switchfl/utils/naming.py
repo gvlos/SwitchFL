@@ -14,7 +14,7 @@ def get_node_id_on_port_id(port_id: PortId) -> NodeId:
     Example:
     >>> get_node_id_on_port_id((4.1, 3.1))
     (4, 3)
-    
+
     Args:
         port_id (PortId): (int, int)
 
@@ -30,7 +30,7 @@ def switch_id2name(switch_id: NodeId) -> str:
     Example:
     >>> switch_id2name((4, 3))
     'switch_4-3'
-    
+
     Args:
         switch_id (NodeId): coordinates in flatlands system: (x: int, y: int)
 
@@ -45,10 +45,10 @@ def switch_id2name(switch_id: NodeId) -> str:
 def name2switch_id(name: str) -> NodeId:
     """get switch id from switch env
 
-    Example: 
+    Example:
     >>> name2switch_id('switch_4-3')
     (4, 3)
-    
+
     Args:
         name (str): switch name in the format 'switch_x-y'
 
