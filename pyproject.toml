@@ -12,10 +12,10 @@ dependencies = [
     "numpy (<2)",
     "pyarray (>=0.2,<0.3)",
     "tqdm (>=4.67.1,<5.0.0)",
-    "flatland-rl (>=4.0.6,<5.0.0)",
+    "flatland-rl (>=4.0.6,<4.2.0)",
     "networkx (>=3.4.2,<4.0.0)",
     "gymnasium (>=1.2.0,<2.0.0)",
-    "pettingzoo (>=1.25.0,<2.0.0)"
+    "pettingzoo (>=1.25.0,<2.0.0)"      
 ]
 
 [project.optional-dependencies]
