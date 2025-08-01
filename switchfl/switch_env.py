@@ -53,7 +53,7 @@ class _SwitchEnv:
         self.train_obs: Dict[TrainAgentHandle, Any]
         self.train_reward: Dict[TrainAgentHandle, float]
         self.train_info: Dict[TrainAgentHandle, Any]
-
+        
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         obs_space = self.observer.get_observation_space(
@@ -154,6 +154,9 @@ class _SwitchEnv:
             action
         ), "Invalid action performed"
 
+        logging.debug("="*80)
+        logging.debug(f"rail time: {self.rail_env_time}")
+        
         node_id = name2switch_id(agent_selection)
         current_switch = self.rail_network.get_switch_on_position(node_id)
         in_port, out_port = current_switch.action_outcomes[action]
@@ -161,7 +164,7 @@ class _SwitchEnv:
         # update train_action_plan such that move_trains step can work it down
         moving_train, train_actions = self.rail_network.get_train_actions(
             node_id, action, self.rail_env.agents
-        )
+        )   
         for train_agent_handle in train_actions.keys():
             self.train_action_plan[train_agent_handle].extend(
                 train_actions[train_agent_handle]
@@ -218,7 +221,9 @@ class _SwitchEnv:
             self._check_active_switch()
 
         # remove duplicates in agents but maintaining order
-        print("active_switches: ", self.active_switch_agents)
+        train_positions = {t.handle: t.position for t in self.rail_env.agents}
+        logging.debug(f"Train pos: {train_positions}")
+        logging.debug(f"active_switches: {self.active_switch_agents}")
         self.active_switch_agents = list(
             OrderedDict.fromkeys(self.active_switch_agents)
         )
@@ -261,7 +266,7 @@ class _SwitchEnv:
                 train.position,
                 train.direction,
             )
-           
+
             # if with the next action the train has entered a switch add the switch to the active switches
             if self.rail_network.get_switch_on_position(new_position) is not None and (
                 train.state == TrainState.READY_TO_DEPART
@@ -281,7 +286,6 @@ class _SwitchEnv:
         - at least one train is in front of a switch
         """
         for train in self.rail_env.agents:
-            print("train_handle: ", train.handle)
             # simulate steps of a train until they arrive at a switch
             # NOTE: yes this is expensive, but only executed once in reset()
             current_position = train.position
@@ -297,10 +301,6 @@ class _SwitchEnv:
                     self.rail_network.get_switch_on_position(current_position)
                     is not None
                 ):
-                    print(
-                        "\tnext_switch:",
-                        self.rail_network.get_switch_on_position(current_position).id,
-                    )
                     # train on switch
                     break
                 last_pos = current_position
@@ -321,7 +321,6 @@ class _SwitchEnv:
             # NOTE: getting the port based on position and direction could be bugged
             # if the first switch directly is directly behind a turn in the rail
             port = self.rail_network.get_port_on_position(last_pos, last_dir)
-            print("\tarriving_port: ", port)
             self.rail_network.block_semaphore(port)
             self.rail_network.set_trains_next_port(train, port)
 

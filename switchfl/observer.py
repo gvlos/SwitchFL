@@ -42,7 +42,7 @@ class _Observer(ABC):
             )
             return
         return self.obs_space.human_format(observation)
-
+    
 
 class StandardObserver(_Observer):
     def __init__(self, delay_levels: int = 3, delay_threshold: int = 20):
@@ -100,10 +100,11 @@ class StandardObserver(_Observer):
         train_at_ports = {
             rail_network.get_trains_next_port(train): train for train in rail_env.agents
         }
-        print(rail_network._train2next_port)
+        logging.debug(f"next port for each train: {rail_network._train2next_port}")
+        logging.debug(f"ports of switch: {agent} with position")
         train_counter = 0  # debugging
         for port in switch.get_port_nodes():
-            print(port, switch.switch_graph.nodes.data("rail_prev_node")[port])
+            logging.debug(f"\t{port} {switch.switch_graph.nodes.data("rail_prev_node")[port]}")
             semaphore.append(switch.semaphores[port])
 
             train = train_at_ports.get(port)
@@ -121,7 +122,9 @@ class StandardObserver(_Observer):
         if (
             train_counter == 0
         ):  # there is no train at the port -> there is no point for observing it
-            print("Bug detected.")
+            logging.error(
+                "Bug detected. No train detected at active switch. Check information in RailNetwork."
+            )
 
         semaphore = np.array(semaphore).astype(int)
         target = np.array(target).astype(int)
