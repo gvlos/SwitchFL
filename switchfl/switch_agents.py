@@ -147,7 +147,7 @@ class _Switch(ABC):
             and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
         ):
             result[next(iter(result))] = [RailEnvActions.STOP_MOVING]
-        return moving_train, 
+        return moving_train, result
 
     def get_port_nodes(self) -> List[PortId]:
         return list(self._port_nodes.values())
