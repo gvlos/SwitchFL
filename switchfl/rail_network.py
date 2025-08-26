@@ -9,6 +9,7 @@ from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.agent_utils import Grid4TransitionsEnum
 from switchfl import NodeId, PortId, TrainAgentHandle
 from switchfl.switch_agents import _Switch, get_switch_type
+from switchfl.utils.logging import format_logger
 from switchfl.utils.naming import get_node_id_on_port_id, switch_id2name
 from switchfl.utils.rail_graph import (
     create_rail_graph,
@@ -68,7 +69,7 @@ def build_rail_graph(rail_env: RailEnv) -> nx.Graph:
 
     Returns:
         nx.Graph: The graph representation of the rail environment.
-    """ 
+    """
     rail_env.reset()
     graph = create_rail_graph(rail_env)
     graph = insert_switch_proximity_nodes(graph)
@@ -80,6 +81,8 @@ def build_rail_graph(rail_env: RailEnv) -> nx.Graph:
 class RailNetwork:
     def __init__(self, rail_env: RailEnv):
         self.logger = logging.getLogger(type(self).__name__)
+        self.logger = format_logger(self.logger)
+
 
         self.switch_network: nx.Graph
 
@@ -108,6 +111,11 @@ class RailNetwork:
             train.handle: None for train in rail_env.agents
         }
         """get the next port the agent is going to enter. 
+        This dictionary changes after a train transition got determined by an agent."""
+        self._train_prev_port: Dict[int, PortId] = {
+            train.handle: None for train in rail_env.agents
+        }
+        """get the previous port the agent came from. 
         This dictionary changes after a train transition got determined by an agent."""
 
     def reset(self):
@@ -247,6 +255,7 @@ class RailNetwork:
         self.transition_semaphore(in_port, target_port)
         # the next port in self._train2next_port
         self.set_trains_next_port(train, target_port)
+        self.set_trains_prev_port(train, out_port)
         self.logger.debug(
             f"num rail segments to next port: {self.get_port_distance(out_port, target_port)} from {out_port} to {target_port}"
         )
@@ -285,24 +294,97 @@ class RailNetwork:
         return switch.get_train_action(action, train_agents)
 
     def get_switch_names(self) -> List[str]:
+        """Get the names of all switches in the network.
+
+        Returns:
+            List[str]: The names of all switches.
+        """
         res = []
         for node in self.switch_network.nodes:
             res.append(switch_id2name(node))
         return res
 
     def get_switch_action_space(self, node: NodeId, seed: int = None) -> Space:
+        """Get the action space for a switch.
+
+        Args:
+            node (NodeId): The ID of the switch to get the action space for.
+            seed (int, optional): Random seed for action space generation. Defaults to None.
+
+        Returns:
+            Space: The action space for the switch.
+        """
         switch = self.get_switch_on_position(node)
         return switch.get_action_space(seed=seed)
 
     def set_trains_next_port(self, train: TrainAgent, port: PortId):
+        """Set the next port for a train.
+
+        Args:
+            train (TrainAgent): The train agent to set the next port for.
+            port (PortId): The next port the train will move to.
+        """
         self._train2next_port[train.handle] = port
 
     def get_trains_next_port(self, train: TrainAgent) -> PortId:
+        """Get the next port for a train.
+
+        Args:
+            train (TrainAgent): The train agent to get the next port for.
+
+        Returns:
+            PortId: The next port the train will move to.
+        """
         return self._train2next_port[train.handle]
+    
+    
+    def set_trains_prev_port(self, train: TrainAgent, port: PortId):
+        """Set the previous port for a train.
+
+        Args:
+            train (TrainAgent): The train agent to set the previous port for.
+            port (PortId): The previous port the train came from.
+        """
+        self._train_prev_port[train.handle] = port
+
+    def get_trains_prev_port(self, train: TrainAgent) -> PortId:
+        """Get the previous port for a train.
+
+        Args:
+            train (TrainAgent): The train agent to get the previous port for.
+
+        Returns:
+            PortId: The previous port the train came from.
+        """         
+        return self._train_prev_port[train.handle]
+    
+    def get_rail_pieces_between_ports(self, source_node: NodeId, target_node: NodeId) -> List[Tuple[int, int]]:
+        """Get the rail pieces between two switch nodes.
+
+        Args:
+            source_node (NodeId): The source switch node.
+            target_node (NodeId): The target switch node.
+
+        Returns:
+            List[Tuple[int, int]]: A list of rail piece coordinates between the two nodes.
+        """
+        edge_data = self.rail_graph.get_edge_data(source_node, target_node)
+        if edge_data is None:
+            return []
+        rail_nodes = edge_data.get("rail_nodes", [])
+        return rail_nodes
 
     def get_switch_neighbor(
         self, switch_id: NodeId = None
     ) -> Dict[PortId, PortId] | Dict[NodeId, Dict[PortId, NodeId]]:
+        """Get the neighboring ports for a switch.
+
+        Args:
+            switch_id (NodeId, optional): The ID of the switch to get neighbors for. Defaults to None.
+
+        Returns:
+            Dict[PortId, PortId] | Dict[NodeId, Dict[PortId, NodeId]]: A dictionary mapping port IDs to their neighboring port IDs, or a dictionary mapping switch IDs to their neighboring port IDs.
+        """
         if switch_id is None:
             # get all neighbors based on port
             res = {}
