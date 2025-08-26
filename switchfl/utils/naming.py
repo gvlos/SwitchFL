@@ -58,3 +58,11 @@ def name2switch_id(name: str) -> NodeId:
     node_id = name.split("_")[1].split("-")
     node_id = (int(node_id[0]), int(node_id[1]))
     return node_id
+
+
+def symmetric_string(s: str, n: int = 80, frame: str = "=") -> str:
+    n_buffer = n - len(s) - 2
+    frame = frame * (n_buffer // 2)
+    frame += " "
+    res = frame + s + frame[::-1]
+    return res
