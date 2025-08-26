@@ -1,22 +1,24 @@
 import functools
 import logging
 from collections import OrderedDict
+from pathlib import Path
 from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+import pandas as pd
+from flatland.core.grid.grid4 import Grid4TransitionsEnum
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnv, RailEnvActions
-
 from flatland.envs.step_utils.states import TrainState
 from flatland.utils.rendertools import AgentRenderVariant
 from pettingzoo import AECEnv
-
 from switchfl import NodeId, TrainAgentHandle
 from switchfl.observer import StandardObserver, _Observer
 from switchfl.rail_network import RailNetwork
-from switchfl.utils.naming import name2switch_id, switch_id2name
+from switchfl.utils.naming import (name2switch_id, switch_id2name,
+                                   symmetric_string)
 
 
 class _SwitchEnv:
@@ -31,6 +33,8 @@ class _SwitchEnv:
         seed: int = None,
     ):
         super().__init__()
+        self.logger = logging.getLogger(type(self).__name__)
+        
         self.rail_env = rail_env
         self.render_mode = render_mode
         self.max_steps = max_steps
@@ -53,7 +57,7 @@ class _SwitchEnv:
         self.train_obs: Dict[TrainAgentHandle, Any]
         self.train_reward: Dict[TrainAgentHandle, float]
         self.train_info: Dict[TrainAgentHandle, Any]
-        
+
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         obs_space = self.observer.get_observation_space(
@@ -129,7 +133,7 @@ class _SwitchEnv:
         obs_space = self.observation_space(agent)
         human_format = getattr(obs_space, "human_format", None)
         if not callable(human_format):
-            logging.error(
+            self.logger.error(
                 f"Observation space: {obs_space} has not method to convert observation into a human format."
             )
             return
@@ -141,7 +145,7 @@ class _SwitchEnv:
         return obs
 
     def _apply_action(self, agent_selection: str, action: int) -> NodeId:
-        """get train actions and update semaphores at the corresponding switches
+        """get train actions and update semaphores at the corresponding switches for a SINGLE train transitioning a switch
 
         Args:
             agent_selection (str): which switch agent is performing the action
@@ -152,42 +156,72 @@ class _SwitchEnv:
         """
         assert self.action_space(agent_selection).contains(
             action
-        ), "Invalid action performed"
+        ), f"Invalid action performed. Allowed action space: {self.action_space(agent_selection)}"
 
-        logging.debug("="*80)
-        logging.debug(f"rail time: {self.rail_env_time}")
-        
+        self.logger.debug(symmetric_string(agent_selection))
+        self.logger.debug(f"rail time: {self.rail_env_time}")
+
         node_id = name2switch_id(agent_selection)
         current_switch = self.rail_network.get_switch_on_position(node_id)
+        # in and out port of the traversing switch
         in_port, out_port = current_switch.action_outcomes[action]
 
         # update train_action_plan such that move_trains step can work it down
         moving_train, train_actions = self.rail_network.get_train_actions(
             node_id, action, self.rail_env.agents
-        )   
-        for train_agent_handle in train_actions.keys():
-            self.train_action_plan[train_agent_handle].extend(
-                train_actions[train_agent_handle]
-            )
-
+        )
         # transition a train if there is actually a train moving
         if isinstance(moving_train, TrainAgent):
             # update rail_network how trains are transitioned from edge to edge
-            next_switch = self.rail_network.transition_train(
+            next_switch, next_port = self.rail_network.transition_train(
                 moving_train, in_port, out_port
             )
         else:
             next_switch = current_switch
+            next_port = None
 
+        self.logger.debug(f"existing plan: {self.train_action_plan}")
+        self.logger.debug(f"new actions: {train_actions}")
+        for train_agent_handle in train_actions.keys():
+            # adapt next train actions
+            # NOTE: if two switches are direct neighbors, the first given train action for the moving train
+            # has to be replaced by the last action of the train_action plan because otherwise the environment
+            # will send the train forward which messes up the scheduling and planning
+            next_train_actions = train_actions[train_agent_handle]
+            if (
+                moving_train is not None 
+                and self.rail_network.get_port_distance(out_port, next_port) == 0
+                and len(self.train_action_plan[train_agent_handle]) > 0  
+            ):
+                # cut away the MOVE_FORWARD action of the new plan, because 
+                # moving into the new switch is done by the action from the previous switch
+                next_train_actions.pop(0)
+                self.train_action_plan[train_agent_handle].extend(next_train_actions)
+            
+            # moving train is None -> stop moving command (stop the train before it enters the next switch)
+            # but retain information about how the train will enter the next switch 
+            # example: move left leads directly on another switch 
+            elif moving_train is None and len(self.train_action_plan[train_agent_handle]) > 0:
+                stop_action = next_train_actions[0]
+                assert stop_action == RailEnvActions.STOP_MOVING
+                self.train_action_plan[train_agent_handle].insert(0, stop_action    )
+            else:
+                self.train_action_plan[train_agent_handle].extend(next_train_actions)
+
+        self.logger.debug(f"updated_plan: {self.train_action_plan}")
         return next_switch.id
 
     def _move_trains(self):
+        """Move all train agents in the RailEnv by one step
+        Also take into account if there is a next action, pre-computed for a train to transit the switch
+        """
         # NOTE: the time when the train departures is already taken into account
         action = {}
         for train in self.rail_env.agents:
             handle = train.handle
             if self.train_done[handle]:
-                # no action for already done trains
+                # no act
+                # ion for already done trains
                 continue
 
             if len(self.train_action_plan[handle]) == 0:
@@ -214,16 +248,20 @@ class _SwitchEnv:
             self.terminated = True
 
     def _move_trains_to_switch(self):
+        self.logger.debug(symmetric_string("move trains", 80, "-"))
         while len(self.active_switch_agents) == 0 and not self.terminated:
             # NOTE: after resetting the environment all trains are in a standstill
             # -> they have to be moved first after the reset
-            self._move_trains()
+            self._move_trains() 
             self._check_active_switch()
 
         # remove duplicates in agents but maintaining order
-        train_positions = {t.handle: t.position for t in self.rail_env.agents}
-        logging.debug(f"Train pos: {train_positions}")
-        logging.debug(f"active_switches: {self.active_switch_agents}")
+        train_positions = {
+            t.handle: (t.position, Grid4TransitionsEnum(t.direction).name)
+            for t in self.rail_env.agents
+        }
+        self.logger.debug(f"Train pos: {train_positions}")
+        self.logger.debug(f"active_switches: {self.active_switch_agents}")
         self.active_switch_agents = list(
             OrderedDict.fromkeys(self.active_switch_agents)
         )
@@ -233,15 +271,15 @@ class _SwitchEnv:
         -> then add the switch to active agents
         """
 
-        # check if a train is ready to depart -> its position on the grid is known
-        current_positions = [
-            train.position
-            for train in self.rail_env.agents
-            if train.position is not None
-        ]
-        if len(current_positions) == 0:
-            # if the train is not on the grid
-            return
+        # # check if a train is ready to depart -> its position on the grid is known
+        # current_positions = [
+        #     train.position
+        #     for train in self.rail_env.agents
+        #     if train.position is not None
+        # ]
+        # if len(current_positions) == 0:
+        #     # if the train is not on the grid
+        #     return
 
         for train in self.rail_env.agents:
             # train is not one the grid yet or if it waiting don't execute something on it.
@@ -267,8 +305,11 @@ class _SwitchEnv:
                 train.direction,
             )
 
+            
             # if with the next action the train has entered a switch add the switch to the active switches
-            if self.rail_network.get_switch_on_position(new_position) is not None and (
+            next_switch = self.rail_network.get_switch_on_position(new_position)
+            self.logger.debug(f"Next switch for train {train.handle} ({train.state.name, train.position}): {next_switch}")
+            if next_switch is not None and (
                 train.state == TrainState.READY_TO_DEPART
                 or train.state == TrainState.MOVING
             ):
@@ -332,6 +373,30 @@ class _SwitchEnv:
             int: _description_
         """
         return sum(self.step_counter.values())
+    
+    def get_env_plan(self, path: Path = None):
+        """Extract information about each switch as a csv from the environment: 
+        This csv should contain: 
+            - switch_id
+            - action (int)
+            - rail env actions (move forward, move_right, move_left, stop) with their corresponding ports
+            - from where to where an action is sending a train
+        """
+        env_plan = []
+        for _, switch in self.rail_network.switches:
+            for action_idx in range(switch.n_actions):
+                env_plan.append(self.rail_network.get_switch_transition_info(
+                    switch.id,
+                    action=action_idx
+                ))
+
+        if path is not None:
+            df = pd.DataFrame(env_plan)
+            df.to_csv(path, index=False, sep=";")
+            self.logger.info(f"Saved environment plan to {path}")
+            return
+        else:
+            return env_plan
 
 
 class ASyncSwitchEnv(_SwitchEnv, AECEnv):
@@ -360,7 +425,7 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
         # no switches with non processed trains left -> time to move trains
         if len(self.active_switch_agents) == 0:
             self._move_trains_to_switch()
-
+            
         # check for done episode
         self.step_counter[self.agent_selection] += 1
         if self.n_steps > self.max_steps:
@@ -384,3 +449,5 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
 
     def close(self):
         return super().close()
+    
+    

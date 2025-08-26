@@ -16,16 +16,16 @@ from switchfl.utils.switch_agent import build_rail_action_map
 
 def build_switch_to_rail_actions(
     switch_graph: nx.Graph,
-) -> Tuple[List[Dict[Any, List[RailEnvActions]]], List[Tuple[Any, Any]]]:
+) -> Tuple[List[Dict[PortId, List[RailEnvActions]]], List[Tuple[PortId, PortId]]]:
     """returns a list of actions for each port.
 
     Args:
         switch_graph (nx.Graph): switch graph with ports and inter-connectivity's
 
     Returns:
-        Tuple[List[Dict[Any, List[RailEnvActions]]], List[Any, Any]]: Each entry in the parent list corresponds to one action
-            1. List[Dict[Any, List[RailEnvActions]]]: each entry contains commands for trains at each port of the switch
-            2. List[Any, Any]: After executing, across which ports will the train transition the switch (source, target)
+        Tuple[List[Dict[PortId, List[RailEnvActions]]], List[Tuple[PortId, PortId]]]: Each entry in the parent list corresponds to one action
+            1. List[Dict[PortId, List[RailEnvActions]]]: each entry contains commands for trains at each port of the switch
+            2. List[Tuple[PortId, PortId]]: After executing, across which ports will the train transition the switch (source, target)
     """
     # add actions to switch_graph
     switch_graph = add_rail_actions(switch_graph)
@@ -40,19 +40,26 @@ class _Switch(ABC):
         switch_graph: nx.Graph,
         port2neighbor: Dict[PortId, Tuple[NodeId, PortId]] = None,
     ):
+        """Switch class for managing switch behavior and actions."""
         self.id = id
+        """Unique identifier for the switch."""
         self.switch_graph = switch_graph
+        """Graph representation of the switch."""
         self.port2neighbor = port2neighbor
+        """Mapping of own port IDs to neighboring switch nodes and their ports."""
 
         self.n_gaits = len(self.switch_graph.nodes)
+        """Number of gait (port) nodes in the switch."""
         self.n_rails = len(self.switch_graph.edges)
-
-        ab = build_switch_to_rail_actions(self.switch_graph)
-        self.actions = ab[0]
+        """Number of rail (edge) connections in the switch."""
+        
+        res = build_switch_to_rail_actions(self.switch_graph)
+        self.actions = res[0]
         """List of actions per port: self.actions[z]: 2 actions per port"""
-        self.action_outcomes = ab[1]
+        self.action_outcomes = res[1]
         """List of port mappings. self.action_outcomes[z]: train from port x to port y"""
-
+        self.n_actions = len(self.action_outcomes)
+        
         self.semaphores: Dict[PortId, bool]
         """which ports are blocked: True, which are free: False"""
         self._port_nodes = OrderedDict(
@@ -140,10 +147,21 @@ class _Switch(ABC):
             and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
         ):
             result[next(iter(result))] = [RailEnvActions.STOP_MOVING]
-        return moving_train, result
+        return moving_train, 
 
     def get_port_nodes(self) -> List[PortId]:
         return list(self._port_nodes.values())
+
+    def get_next_node(self, action: int) -> Tuple[NodeId, PortId]:
+        """Given a discrete action return the node a train would transition to
+
+        Args:
+            action (int): discrete action
+
+        Returns:
+            Tuple[NodeId, PortId]: The next node and port the train would transition to
+        """
+        self.action_outcomes[action]
 
     @abstractmethod
     def get_action_space(self, seed: int = None) -> Space:

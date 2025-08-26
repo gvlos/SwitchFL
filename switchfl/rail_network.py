@@ -1,4 +1,5 @@
-from typing import Dict, List, Tuple
+import logging
+from typing import Any, Dict, Iterator, List, Tuple
 from gymnasium import Space
 import networkx as nx
 import numpy as np
@@ -7,7 +8,7 @@ from flatland.envs.rail_env import RailEnv, RailEnvActions
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.agent_utils import Grid4TransitionsEnum
 from switchfl import NodeId, PortId, TrainAgentHandle
-from switchfl.switch_agents import _Switch, Switch2, get_switch_type
+from switchfl.switch_agents import _Switch, get_switch_type
 from switchfl.utils.naming import get_node_id_on_port_id, switch_id2name
 from switchfl.utils.rail_graph import (
     create_rail_graph,
@@ -18,6 +19,14 @@ from switchfl.utils.rail_graph import (
 
 
 def build_switch_network(rail_network: nx.Graph) -> nx.Graph:
+    """Build a network of switches from the rail network.
+
+    Args:
+        rail_network (nx.Graph): The rail network graph.
+
+    Returns:
+        nx.Graph: The switch network graph.
+    """
     switch_network = nx.Graph()
     df = pd.DataFrame(
         [attr for _, attr in rail_network.nodes.data()],
@@ -52,6 +61,14 @@ def build_switch_network(rail_network: nx.Graph) -> nx.Graph:
 
 
 def build_rail_graph(rail_env: RailEnv) -> nx.Graph:
+    """Build a graph representation of the rail environment.
+
+    Args:
+        rail_env (RailEnv): The rail environment instance.
+
+    Returns:
+        nx.Graph: The graph representation of the rail environment.
+    """ 
     rail_env.reset()
     graph = create_rail_graph(rail_env)
     graph = insert_switch_proximity_nodes(graph)
@@ -62,6 +79,8 @@ def build_rail_graph(rail_env: RailEnv) -> nx.Graph:
 
 class RailNetwork:
     def __init__(self, rail_env: RailEnv):
+        self.logger = logging.getLogger(type(self).__name__)
+
         self.switch_network: nx.Graph
 
         self.rail_graph = build_rail_graph(rail_env)
@@ -121,7 +140,7 @@ class RailNetwork:
         """get the neighbor switch instance and its port assuming you are
         leaving the given port and end up at the next switch
 
-        Args:
+        Args:p
             port (PortId): out port of a switch
 
         Returns:
@@ -203,7 +222,7 @@ class RailNetwork:
 
     def transition_train(
         self, train: TrainAgent, in_port: PortId, out_port: PortId
-    ) -> _Switch:
+    ) -> Tuple[_Switch, PortId]:
         """
         update semaphores and information at which switch the train will arrive next
 
@@ -213,7 +232,8 @@ class RailNetwork:
             out_port (PortId): the port the train will leave the switch
 
         Returns:
-            _Switch: instance of the next switch the train will arrive at after leaving on given out_port
+            Tuple[_Switch, PortID]: instance of the next switch the train will arrive at after
+                leaving on given out_port, and the port though which the train will enter the next switch
         """
         in_switch = np.array(in_port, dtype=int)
         out_switch = np.array(out_port, dtype=int)
@@ -227,8 +247,10 @@ class RailNetwork:
         self.transition_semaphore(in_port, target_port)
         # the next port in self._train2next_port
         self.set_trains_next_port(train, target_port)
-
-        return next_switch
+        self.logger.debug(
+            f"num rail segments to next port: {self.get_port_distance(out_port, target_port)} from {out_port} to {target_port}"
+        )
+        return next_switch, target_port
 
     def transition_semaphore(self, source: PortId, target: PortId):
         """handle semaphore freeing and blocking if a train is moving from the given source port (source) and moving to the outgoing port.
@@ -277,3 +299,67 @@ class RailNetwork:
 
     def get_trains_next_port(self, train: TrainAgent) -> PortId:
         return self._train2next_port[train.handle]
+
+    def get_switch_neighbor(
+        self, switch_id: NodeId = None
+    ) -> Dict[PortId, PortId] | Dict[NodeId, Dict[PortId, NodeId]]:
+        if switch_id is None:
+            # get all neighbors based on port
+            res = {}
+            for _, switch in self.switches:
+                res[switch.id] = self.get_switch_neighbor(switch.id)
+            return res
+
+        res = {}
+        switch = self.get_switch_on_position(switch_id)
+        for port in switch.get_port_nodes():
+            res[port] = self.get_neighbor_switch(port)[1]
+        return res
+
+    def get_port_distance(self, port1: PortId, port2: PortId) -> int | None:
+        """Get the number of rail segments between two ports.
+        If there is no rail connecting those two ports directly return None
+
+        Args:
+            port1 (PortId): first port
+            port2 (PortId): second port
+
+        Returns:
+            int | None: the number of rail segments connecting the two ports. If there is no direct edge -> return None
+        """
+        edge_data = self.rail_graph.get_edge_data(port1, port2)
+        if edge_data is None:
+            return None
+        rail_nodes = edge_data.get("rail_nodes", None)
+        return len(rail_nodes)
+
+    def get_switch_transition_info(
+        self, switch_id: NodeId, action: int
+    ) -> Dict[str, Any]:
+        """Get transition information for a specific node and action.
+
+        Args:
+            switch_id (NodeId): The ID of the node to get information for.
+            action (int): The action to get information for.
+        Returns:
+            Dict[str, Any]: A dictionary containing transition information about the switch and its actions.
+        """
+        switch = self.get_switch_on_position(switch_id)
+
+        transition_info = {
+            "node": switch_id,
+            "action": action,
+        }
+
+        in_port, out_port = switch.action_outcomes[action]
+        transition_info["in_port"] = in_port
+        transition_info["out_port"] = out_port
+        next_node, next_port = switch.port2neighbor[out_port]
+        transition_info["next_node"] = next_node
+        transition_info["next_port"] = next_port
+        transition_info["train_actions"] = switch.actions[action]
+        return transition_info
+
+    @property
+    def switches(self) -> Iterator[Tuple[Tuple[int, int], _Switch]]:
+        return iter(self.switch_network.nodes.data("switch_cls"))
