@@ -8,6 +8,7 @@ from numpy import ndarray
 from switchfl.rail_network import RailNetwork
 from switchfl.spaces import MultiDiscreteSwitchObsSpace
 from switchfl.switch_agents import _Switch
+from switchfl.utils.logging import format_logger
 from switchfl.utils.naming import name2switch_id, symmetric_string
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
@@ -17,6 +18,8 @@ import numpy as np
 class _Observer(ABC):
     def __init__(self):
         self.logger = logging.getLogger(type(self).__name__)
+        self.logger = format_logger(self.logger)
+
 
     @abstractmethod
     def observe(
@@ -136,7 +139,6 @@ class StandardObserver(_Observer):
         train_at_ports = {
             rail_network.get_trains_next_port(train): train for train in rail_env.agents
         }
-        rail_network.get_switch_on_port()
         logging_var = {k: t.handle for k, t in train_at_ports.items()}
         self.logger.debug(f"train at ports {logging_var}")
         self.logger.debug(f"next port for each train: {rail_network._train2next_port}")
@@ -185,8 +187,8 @@ class StandardObserver(_Observer):
             # ax2.axis("off")
             # plt.show()
 
-            
-            self.logger.error(
+
+            self.logger.fatal       (
                 "Bug detected. No train detected at active switch. Check information in RailNetwork."
             )
 
