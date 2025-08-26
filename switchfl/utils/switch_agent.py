@@ -1,12 +1,13 @@
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 import networkx as nx
 from flatland.envs.rail_env import RailEnvActions
+from switchfl import PortId
 
 
 def build_rail_action_map(
     graph: nx.Graph,
-) -> Tuple[List[Dict[Any, List[RailEnvActions]]], List[Tuple[Any, Any]]]:
+) -> Tuple[List[Dict[PortId, List[RailEnvActions]]], List[Tuple[PortId, PortId]]]:
     """computes which discrete environment actions result in which environment actions
 
     Args:
@@ -17,9 +18,9 @@ def build_rail_action_map(
 
 
     Returns:
-        Tuple[List[Dict[Any, List[RailEnvActions]]], List[Any, Any]]: Each entry in the parent list corresponds to one action
-            1. List[Dict[Any, List[RailEnvActions]]]: each entry contains commands for trains at each port of the switch
-            2. List[Any, Any]: After executing, across which ports will the train transition the switch (source, target)
+        Tuple[List[Dict[PortId, List[RailEnvActions]]], List[Tuple[PortId, PortId]]]: Each entry in the parent list corresponds to one action
+            1. List[Dict[PortId, List[RailEnvActions]]]: each entry contains commands for trains at each port of the switch
+            2. List[Tuple[PortId, PortId]]: After executing, across which ports will the train transition the switch (source, target)
     """
     actions = []
     target_map = []
