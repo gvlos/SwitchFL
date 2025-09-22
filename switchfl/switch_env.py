@@ -420,10 +420,9 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
         max_steps=200,
         render_mode=None,
         observer=None,
-        monitoring=False,
         seed=None,
     ):
-        super().__init__(rail_env, max_steps, render_mode, observer, monitoring, seed)
+        super().__init__(rail_env, max_steps, render_mode, observer, seed)
 
     def agent_iter(self, max_iter=2**63):
         while not (self.terminated or self.truncated):
