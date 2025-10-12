@@ -44,8 +44,10 @@ def create_rail_graph(env: RailEnv, cmap="tab20") -> nx.Graph:
                 and next_col >= 0
                 and next_col < env.height
             ):
+                # Use deterministic color based on position to avoid randomness
+                color_index = (row * env.width + col) % 20
                 node_color = mcolors.to_hex(
-                    mcolors.to_rgba_array(cmap(np.random.randint(20)))
+                    mcolors.to_rgba_array(cmap(color_index))
                 )
                 if not graph.has_node((row, col)):
                     pos = np.array(

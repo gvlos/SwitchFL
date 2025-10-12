@@ -17,7 +17,7 @@ from pettingzoo import AECEnv
 from switchfl import NodeId, TrainAgentHandle
 from switchfl.observer import StandardObserver, _Observer
 from switchfl.rail_network import RailNetwork
-from switchfl.utils.logging import format_logger
+from switchfl.utils.logging import format_logger, set_seed
 from switchfl.utils.naming import name2switch_id, switch_id2name, symmetric_string
 
 
@@ -78,7 +78,31 @@ class _SwitchEnv:
         return action_space
 
     def reset(self, seed=None, options=None):
+        # Set all possible random seeds if provided - need to do this before rail_env.reset()
+        # as Flatland may use various random number generators internally during reset
+        if seed is not None:
+            set_seed(seed)
         obs, info = self.rail_env.reset()
+        
+        # NOTE: Force deterministic agent ordering and handle assignment
+        # This works around Flatland's non-deterministic train assignment
+        if seed is not None and hasattr(self.rail_env, 'agents') and len(self.rail_env.agents) > 1:
+            # Sort agents by initial position and then by direction (as secondary key)
+            # This ensures trains at same position maintain consistent direction ordering
+            def sort_key(agent):
+                pos = agent.initial_position or (0, 0)
+                dir_val = agent.initial_direction.value if hasattr(agent.initial_direction, 'value') else int(agent.initial_direction)
+                return pos + (dir_val,)
+            
+            sorted_agents = sorted(self.rail_env.agents, key=sort_key)
+            
+            # Reassign handles deterministically based on sorted order
+            for new_handle, agent in enumerate(sorted_agents):
+                agent.handle = new_handle
+            
+            # Update the agents list to be in sorted order
+            self.rail_env.agents = sorted_agents
+        
         self.rail_network.reset()
 
         self.terminated = False
@@ -375,6 +399,7 @@ class _SwitchEnv:
             # NOTE: getting the port based on position and direction could be bugged
             # if the first switch directly is directly behind a turn in the rail
             port = self.rail_network.get_port_on_position(last_pos, last_dir)
+            print("port:", port)
             self.rail_network.block_semaphore(port)
             self.rail_network.set_trains_next_port(train, port)
 

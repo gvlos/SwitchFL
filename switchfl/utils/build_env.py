@@ -2,6 +2,7 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.line_generators import sparse_line_generator
 from switchfl.switch_env import ASyncSwitchEnv
+from switchfl.utils.logging import set_seed
 
 
 def build_standard_async_env(
@@ -15,6 +16,10 @@ def build_standard_async_env(
     render_mode: str = None,
     seed: int = None,
 ):
+    # Apply comprehensive seeding before creating any generators
+    if seed is not None:
+        set_seed(seed)
+    
     rail_env = RailEnv(
         width=width,
         height=height,
@@ -23,9 +28,9 @@ def build_standard_async_env(
             grid_mode=grid_mode,
             max_rails_between_cities=max_rails_between_cities,
             max_rail_pairs_in_city=max_rail_pairs_in_city,
-            seed=seed,
+            seed=seed,  # Seed controls rail layout
         ),
-        line_generator=sparse_line_generator(seed=seed),
+        line_generator=sparse_line_generator(seed=seed),  # Seed controls train placement
         number_of_agents=num_trains,
     )
 

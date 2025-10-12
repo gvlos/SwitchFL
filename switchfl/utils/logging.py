@@ -37,9 +37,39 @@ def format_logger(logger: logging.Logger) -> logging.Logger:
         logging.Logger: The formatted logger.
     """
     logger.propagate = False  # Prevent duplicate logs
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(CustomFormatter())
-    logger.addHandler(ch)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setFormatter(CustomFormatter())
+    logger.addHandler(stream_handler)
     logger.setLevel(logging.DEBUG)
     return logger
+
+
+def set_seed(seed: int):
+    """Set the random seed for reproducibility.
+
+    Args:
+        seed (int): The seed value to set.
+    """
+    # Apply comprehensive seeding before creating any generators
+    import numpy as np
+    import random
+    import os
+    
+    # Set all random seeds aggressively
+    np.random.seed(seed)
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    # Try to set TensorFlow and PyTorch seeds if available
+    try:
+        import tensorflow as tf
+        tf.random.set_seed(seed)
+    except ImportError:
+        pass
+    try:
+        import torch
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
