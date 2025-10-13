@@ -168,6 +168,22 @@ env.render()
 
 Use this to visually debug the movement of trains and decisions made by switches.
 
+## Implementation Details
+
+SwitchFL transforms Flatland's train-centric approach into a **switch-centric multi-agent system** through several key components:
+
+- **ASyncSwitchEnv**: Main environment controller that orchestrates train movement simulation, agent activation, and reward calculation
+- **RailNetwork**: Manages railway topology, switch-to-switch connections, and train-switch interactions using graph representations
+- **Switch Agents**: Individual controllers for different switch types (T-Crossing, Standard Crossing, Single/Double Turn) with unique action spaces
+- **RailGraph**: Converts Flatland's grid-based environment into efficient graph structures for network analysis
+- **Observer System**: Provides localized state observations including train proximity, port status, and network topology
+
+The environment operates through an **asynchronous simulation loop** where trains move toward switches, switches become active agents when trains approach, and routing decisions are executed based on agent actions. This creates a distributed control system where coordination emerges through individual switch decisions.
+
+For comprehensive implementation details, architecture diagrams, and technical challenges, please refer to the [detailed documentation](switchfl/README.md).
+
+
+
 
 ## Research & Use Cases
 
