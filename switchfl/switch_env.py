@@ -48,6 +48,7 @@ class _SwitchEnv:
         self.agents = self.possible_agents
 
         self.active_switch_agents = []
+        self.active_trains = []
 
         self.terminated: bool
         self.truncated: bool
@@ -82,7 +83,7 @@ class _SwitchEnv:
         # as Flatland may use various random number generators internally during reset
         if seed is not None:
             set_seed(seed)
-        obs, info = self.rail_env.reset()
+        obs, info = self.rail_env.reset(random_seed=seed)
         
         # NOTE: Force deterministic agent ordering and handle assignment
         # This works around Flatland's non-deterministic train assignment
@@ -265,6 +266,7 @@ class _SwitchEnv:
             self.train_done,
             self.train_info,
         ) = self.rail_env.step(train_actions)
+
         self.rail_env_time += 1
         self._check_action_execution()
 
@@ -283,6 +285,19 @@ class _SwitchEnv:
             self._move_trains()
             self._check_active_switch()
 
+        # if self.terminated:
+        #     a = self.rail_env.render()
+        #     fig, ax = plt.subplots(figsize=(8,8))
+        #     plt.imshow(a)
+        #     ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+        #     ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+        #     ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+        #     ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+        #     ax.set_xticklabels(np.arange(18))
+        #     ax.set_yticklabels(np.arange(18))
+        #     plt.show(block=False)
+        #     raise RuntimeError("Environment is terminated. Deadlock occurred.")
+
         # remove duplicates in agents but maintaining order
         train_positions = {
             t.handle: (t.position, Grid4TransitionsEnum(t.direction).name)
@@ -293,11 +308,13 @@ class _SwitchEnv:
         self.active_switch_agents = list(
             OrderedDict.fromkeys(self.active_switch_agents)
         )
+        self.active_trains = list(OrderedDict.fromkeys(self.active_trains))
 
     def _check_active_switch(self):
         """do simulation step and see if a train enters a switch node
         -> then add the switch to active agents
         """
+
         for train in self.rail_env.agents:
             # train is not one the grid yet or if it waiting don't execute something on it.
             if train.position is None or train.state == TrainState.WAITING:
@@ -312,21 +329,22 @@ class _SwitchEnv:
             # do a simulation step an get the next switch if needed
             (
                 new_cell_valid,
-                new_direction,
-                new_position,
+                (new_position,
+                new_direction),
                 transition_valid,
                 preprocessed_action,
             ) = self.rail_env.rail.check_action_on_agent(
                 next_action,
-                train.position,
-                train.direction,
+                ((train.position),
+                train.direction)
             )
 
             # if with the next action the train has entered a switch add the switch to the active switches
             next_switch = self.rail_network.get_switch_on_position(new_position)
             self.logger.debug(
-                f"Next switch for train {train.handle} ({train.state.name, train.position}): {next_switch}"
+                f"Next switch for train {train.handle} ({train.state.name, train.position}): {next_switch.id if next_switch is not None else None}"
             )
+
             if next_switch is not None and (
                 train.state == TrainState.READY_TO_DEPART
                 or train.state == TrainState.MOVING
@@ -334,6 +352,7 @@ class _SwitchEnv:
                 # use new pos because the switch coordinates are its node_id
                 switch_id = switch_id2name(new_position)
                 self.active_switch_agents.append(switch_id)
+                self.active_trains.append(train.handle)
 
     def _check_action_execution(self):
         """checks if the action has been executed successfully
@@ -385,21 +404,21 @@ class _SwitchEnv:
                 last_dir = current_direction
                 (
                     new_cell_valid,
-                    current_direction,
-                    current_position,
+                    (current_position,
+                    current_direction),
                     transition_valid,
                     preprocessed_action,
                 ) = self.rail_env.rail.check_action_on_agent(
                     RailEnvActions.MOVE_FORWARD,
-                    current_position,
-                    current_direction,
+                    (current_position,
+                    current_direction),
                 )
 
             # last pos corresponds to rail_prev_node
             # NOTE: getting the port based on position and direction could be bugged
-            # if the first switch directly is directly behind a turn in the rail
+            # if the first switch is directly behind a turn in the rail
             port = self.rail_network.get_port_on_position(last_pos, last_dir)
-            print("port:", port)
+            self.logger.debug(f"port: {port}")
             self.rail_network.block_semaphore(port)
             self.rail_network.set_trains_next_port(train, port)
 
@@ -452,7 +471,18 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
     def agent_iter(self, max_iter=2**63):
         while not (self.terminated or self.truncated):
             self.agent_selection = self.active_switch_agents.pop(0)
+            self.active_trains.pop(0)
+            if len(self.active_switch_agents) == 0:
+                print('No active switch agents left!')
             yield self.agent_selection
+        if self.terminated:
+            self.logger.warning(
+                "termination."
+            )
+        elif self.truncated:
+            self.logger.warning(
+                "truncation."
+            )
 
     def step(self, action) -> Dict[str, Any]:
         # check if current agent is still operating

@@ -135,6 +135,7 @@ class StandardObserver(_Observer):
         semaphore = []
         target = []
         delay = []
+        active_train = None
 
         train_at_ports = {
             rail_network.get_trains_next_port(train): train for train in rail_env.agents
@@ -144,8 +145,8 @@ class StandardObserver(_Observer):
         self.logger.debug(f"next port for each train: {rail_network._train2next_port}")
         self.logger.debug(f"ports of switch: {agent} with position")
         train_counter = 0  # debugging
-        for port in switch.get_port_nodes():
-            self.logger.debug(f"\t{port} {switch.switch_graph.nodes.data("rail_prev_node")[port]}")
+        for port in switch.get_port_nodes():  # Get port IDs of this node
+            self.logger.debug(f"port {port} coming from cell {switch.switch_graph.nodes.data('rail_prev_node')[port]}")
             semaphore.append(switch.semaphores[port])
 
             train = train_at_ports.get(port)
@@ -159,11 +160,13 @@ class StandardObserver(_Observer):
                 )
                 target.extend(train.target)
                 train_counter += 1
+                active_train = train.handle
 
         if (
             train_counter == 0
-        ):  # there is no train at the port -> there is no point for observing it
-            # import matplotlib.pyplot as plt
+        ):  
+            # there is no train at the port -> there is no point for observing it
+            import matplotlib.pyplot as plt
             # from flatland.utils.rendertools import AgentRenderVariant
             # import networkx as nx
             # fig, (ax1, ax2) = plt.subplots(ncols=2)
@@ -185,7 +188,18 @@ class StandardObserver(_Observer):
             # )
             # ax1.axis("off")
             # ax2.axis("off")
-            # plt.show()
+            # plt.show(block=False)
+
+            # a = rail_env.render()
+            # fig, ax = plt.subplots(figsize=(8,8))
+            # plt.imshow(a)
+            # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+            # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+            # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+            # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+            # ax.set_xticklabels(np.arange(18))
+            # ax.set_yticklabels(np.arange(18))
+            # plt.show(block=False)
 
 
             self.logger.fatal       (
@@ -195,8 +209,8 @@ class StandardObserver(_Observer):
         semaphore = np.array(semaphore).astype(int)
         target = np.array(target).astype(int)
         delay = np.array(delay).astype(int)
-        observation = np.concatenate([semaphore, target, delay], dtype=np.int64)
-        info = {"action_mask": switch.get_action_mask()}
+        observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
+        info = {"action_mask": switch.get_action_mask(), "active_train": active_train}
         return observation, info
 
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):

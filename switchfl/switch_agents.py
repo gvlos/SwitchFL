@@ -43,7 +43,7 @@ class _Switch(ABC):
         """Switch class for managing switch behavior and actions."""
         self.id = id
         """Unique identifier for the switch."""
-        self.switch_graph = switch_graph
+        self.switch_graph = switch_graph  # local_switch_graph
         """Graph representation of the switch."""
         self.port2neighbor = port2neighbor
         """Mapping of own port IDs to neighboring switch nodes and their ports."""
@@ -140,6 +140,11 @@ class _Switch(ABC):
             result[train_agent.handle] = actions
             if actions[0] != RailEnvActions.STOP_MOVING:
                 moving_train = train_agent
+
+        if len(result) == 0:
+            print(
+                f"No train is at switch {self.id} for action {action}"
+            )
 
         # If only one train and it is STOP_MOVING
         if (

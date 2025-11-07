@@ -1,0 +1,273 @@
+from .switch_env import ASyncSwitchEnv, name2switch_id, switch_id2name
+import numpy as np
+import pickle
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+
+# DO_NOTHING: 0
+# MOVE_LEFT: 1
+# MOVE_FORWARD: 2
+# MOVE_RIGHT: 3
+# STOP_MOVING: 4
+
+# directions
+# 1 = EAST
+# 2 = NORTH
+# 3 = WEST
+# 4 = SOUTH
+
+class DistrQLearning:
+    """
+    DistrQLearning is a class that implements a Distributed Q-learning agent.
+
+    Parameters
+    ----------
+    gamma : float
+        The discount factor.
+    default_q : float
+        The default value for the Q-table.
+    """
+    def __init__(self, env : ASyncSwitchEnv, gamma = 1., epsilon = 0.4, epsilon_decay_rate = 0., lr = 0.4, lr_decay_rate = 0., default_q = 0., seed = 450565):
+        self.env = env  # Environment to interact with
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_decay_rate = epsilon_decay_rate
+        self.lr = lr
+        self.lr_decay_rate = lr_decay_rate
+        self.default = [default_q] # MISSING NUMBER OF ACTIONS
+        self.q_table = {}
+        self.seed = seed
+        self.rng  = np.random.RandomState(seed)
+
+    def __check_entry(self, state, agent):
+        """
+        Checks if the state is in the Q-table and adds it if it is not.
+
+        Parameters
+        ----------
+        state : int
+            The state to check.
+        """
+        if tuple(state) not in self.q_table:
+            self.q_table[tuple(state)] = self.default * self.env.action_space(agent).n
+
+    def __decay_epsilon(self, episode):
+        """
+        Decays the epsilon value.
+
+        Parameters
+        ----------
+        episode : int
+            The episode number.
+        """
+        self.epsilon = self.epsilon * (self.epsilon_decay_rate ** episode)
+
+    def __decay_lr(self, episode):
+        """
+        Decays the learning rate.
+
+        Parameters
+        ----------
+        episode : int
+            The episode number.
+        """
+        self.lr = self.lr * (self.lr_decay_rate ** episode)
+
+    def learn(self, num_episodes: int):
+        """
+        Placeholder for the learning method.
+
+        Parameters
+        ----------
+        num_timesteps : int
+            The number of timesteps to learn.
+        """
+
+        cum_reward = 0.
+
+
+        for t in tqdm(range(num_episodes)):
+
+            self.env.reset(seed=self.seed * (t+1))
+
+            update_dict = {}
+
+            for agent in self.env.agent_iter():
+
+                # a = self.env.rail_env.render()
+                # fig, ax = plt.subplots(figsize=(8,8))
+                # plt.imshow(a)
+                # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+                # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+                # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+                # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+                # ax.set_xticklabels(np.arange(18))
+                # ax.set_yticklabels(np.arange(18))
+                # plt.show(block=True)
+
+                observation, reward, termination, truncation, info = self.env.last()
+                
+                if termination or truncation:
+                    break
+
+                # self.__decay_epsilon(t)
+                # if self.rng.rand() < self.epsilon:
+                #     action = self.env.action_space(agent).sample(info["action_mask"])
+                # else:
+                #     action = self.max_action(observation, agent, info["action_mask"])
+
+                action = self.env.action_space(agent).sample(info["action_mask"])
+
+
+                post_step_info = self.env.step(action)
+                active_train = info["active_train"]
+
+                # Può accadere che le observation consecutive sono di switch non consecutivi quindi bisogna selezionare l'observation giusta per fare l'update
+                if (agent, active_train) in update_dict:
+                    previous_obs = update_dict[agent][0]
+                    previous_act = update_dict[agent][1]
+                    previous_agent = update_dict[agent][2]
+                    self.update(state=previous_obs, action=previous_act,
+                                reward=reward, next_state=observation, agent=previous_agent)
+
+                next_q_agent = post_step_info["next_switch"]
+                update_dict[(next_q_agent, active_train)] = (observation, action, agent)
+                
+                cum_reward += reward
+
+
+        self.env.close()
+
+    def _get_next_q_agent(self, agent, action):
+        
+        switch_id = name2switch_id(agent)
+        switch = self.env.rail_network.get_switch_on_position(switch_id)
+
+        _, destination_port = switch.action_outcomes[action]
+        next_switch_id = switch.port2neighbor[destination_port][0]
+        next_q_agent = switch_id2name(next_switch_id)
+
+        return next_q_agent
+
+    def eval(self, state, action, agent):
+        """
+        Evaluates the Q-value of a state-action pair.
+
+        Parameters
+        ----------
+        state : int
+            The state.
+        action : int
+            The action.
+
+        Returns
+        -------
+        float
+            The Q-value of the state-action pair.
+        """
+        self.__check_entry(state, agent)
+        return self.q_table[tuple(state)][action]
+
+    def update(self, state, action, reward, next_state = None, agent = None):
+        """
+        Updates the Q-value of a state-action pair.
+
+        Parameters
+        ----------
+        lr : float
+            The learning rate.
+        state : int
+            The state.
+        action : int
+            The action.
+        reward : float
+            The reward.
+        next_state : int
+            The next state.
+        """
+        self.__check_entry(state, agent)
+
+        self.__decay_lr(self.env.rail_env_time)
+
+        self.q_table[tuple(state)][action] = \
+            (1 - self.lr) * self.q_table[tuple(state)][action] + \
+            self.lr * (reward + self.gamma * self.max_q(next_state, agent))
+        
+    def max_q(self, state, agent):
+        """
+        Returns the maximum Q-value of a state.
+
+        Parameters
+        ----------
+        state : int
+            The state.
+
+        Returns
+        -------
+        float
+            The maximum Q-value of the state
+        """
+        self.__check_entry(state, agent)
+        return max(self.q_table[tuple(state)]) if state is not None else 0.
+    
+    def max_action(self, state, agent, action_mask):
+        """
+        Returns the action that maximizes the Q-value of a state.
+        
+        Parameters
+        ----------
+        state : int
+            The state.
+
+        Returns
+        -------
+        int
+            The action that maximizes the Q-value of the state.
+        """
+        self.__check_entry(state, agent)
+        max_q = np.argmax(self.q_table[tuple(state)])
+        if action_mask[max_q]:
+            return max_q
+        else:
+            # If the action with max Q-value is not allowed, choose among allowed actions
+            allowed_actions = [a for a in range(len(action_mask)) if action_mask[a]]
+            allowed_q_values = [self.q_table[tuple(state)][a] for a in allowed_actions]
+            return allowed_actions[np.argmax(allowed_q_values)]
+
+    def save(self, filename: str, mode: str = 'pickle'):
+        """
+        Dumps the agent to a file.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file.
+        mode : str
+            The mode of the dump (pickle, csv, parquet).
+        """
+        if mode == 'pickle':
+            self.__dump_pickle(filename)
+        elif mode == 'csv':
+            self.__dump_csv(filename)
+        elif mode == 'parquet':
+            self.__dump_parquet(filename)
+
+    def load(filename: str):
+        """
+        Loads the agent from a file (pickle).
+        
+        Parameters
+        ----------
+        filename : str
+            The name of the file.
+        """
+        return DistrQLearning.__load_pickle(filename)
+
+    def __dump_pickle(self, filename: str):
+        with open(filename, 'wb') as f:
+            pickle.dump(self.q_table, f)
+
+    def __load_pickle(self, filename: str):
+        with open(filename, 'rb') as f:
+            self.q_table = pickle.load(f)
