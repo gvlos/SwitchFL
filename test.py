@@ -26,6 +26,7 @@ if __name__=='__main__':
 
     env.reset(seed=random_seed)
 
+    num_iter = 0
     for agent in env.agent_iter():
 
         observation, reward, termination, truncation, info = env.last()
@@ -34,6 +35,7 @@ if __name__=='__main__':
             break
         
         # Replace with your custom switch policy
+        env.action_space(agent).seed(random_seed * num_iter + 1)
         action = env.action_space(agent).sample(info["action_mask"])
 
         env.step(action)
@@ -48,5 +50,7 @@ if __name__=='__main__':
         ax.set_xticklabels(np.arange(18))
         ax.set_yticklabels(np.arange(18))
         plt.show(block=True)
+
+        num_iter += 1
 
     env.close()

@@ -124,6 +124,12 @@ class _SwitchEnv:
         self.train_reward = {train.handle: 0.0 for train in self.rail_env.agents}
         self.train_info = {train.handle: None for train in self.rail_env.agents}
 
+        self.active_switch_agents = []
+        self.active_trains = []
+        
+        self.agent_selection = None
+        self.active_train = None
+
         self._move_trains_to_switch()
         self._init_semaphores()
 
@@ -194,11 +200,15 @@ class _SwitchEnv:
 
         # update train_action_plan such that move_trains step can work it down
         moving_train, train_actions = self.rail_network.get_train_actions(
-            node_id, action, self.rail_env.agents
+            node_id, action, self.active_train
         )
+
         # transition a train if there is actually a train moving
-        if isinstance(moving_train, TrainAgent):
+        if moving_train is not None:
             # update rail_network how trains are transitioned from edge to edge
+            
+            moving_train = self.rail_env.agents[moving_train]
+
             next_switch, next_port = self.rail_network.transition_train(
                 moving_train, in_port, out_port
             )
@@ -304,11 +314,15 @@ class _SwitchEnv:
             for t in self.rail_env.agents
         }
         self.logger.debug(f"Train pos: {train_positions}")
+
+        sorting_order = np.argsort(self.active_trains)
+        self.active_trains = sorted(self.active_trains)
+
+        self.active_switch_agents = np.array(self.active_switch_agents)[np.array(sorting_order)].tolist()
+
         self.logger.debug(f"active_switches: {self.active_switch_agents}")
-        self.active_switch_agents = list(
-            OrderedDict.fromkeys(self.active_switch_agents)
-        )
-        self.active_trains = list(OrderedDict.fromkeys(self.active_trains))
+        self.logger.debug(f"active_trains: {self.active_trains}")
+
 
     def _check_active_switch(self):
         """do simulation step and see if a train enters a switch node
@@ -343,7 +357,7 @@ class _SwitchEnv:
             next_switch = self.rail_network.get_switch_on_position(new_position)
             self.logger.debug(
                 f"Next switch for train {train.handle} ({train.state.name, train.position}): {next_switch.id if next_switch is not None else None}"
-            )
+            ) 
 
             if next_switch is not None and (
                 train.state == TrainState.READY_TO_DEPART
@@ -370,8 +384,8 @@ class _SwitchEnv:
             rail_pieces = self.rail_network.get_rail_pieces_between_ports(
                 source_node, target_node
             )
-            if train.position not in [*rail_pieces, source_node, target_node]:
-                self.logger.error(f"Train {train.handle} deviated from planned path!")
+            # if train.position not in [*rail_pieces, source_node, target_node]:
+            #     self.logger.error(f"Train {train.handle} deviated from planned path!")
 
     def _init_semaphores(self):
         """executed in reset()
@@ -471,7 +485,7 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
     def agent_iter(self, max_iter=2**63):
         while not (self.terminated or self.truncated):
             self.agent_selection = self.active_switch_agents.pop(0)
-            self.active_trains.pop(0)
+            self.active_train = self.active_trains.pop(0)
             if len(self.active_switch_agents) == 0:
                 print('No active switch agents left!')
             yield self.agent_selection
@@ -515,7 +529,7 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
     def observe(self, agent) -> np.ndarray:
         obs, info = self.observer.observe(
             agent=agent,
-            rail_env=self.rail_env,
+            env=self,
             rail_network=self.rail_network,
         )
         self.infos[agent].update(info)

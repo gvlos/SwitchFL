@@ -25,8 +25,6 @@ if __name__=='__main__':
 
     env = ASyncSwitchEnv(rail_env, render_mode="human")
 
-    env.reset(seed=random_seed)
-
     model = DistrQLearning(env=env,
                            gamma = 1.,
                            epsilon = 0.4,

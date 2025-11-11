@@ -127,7 +127,7 @@ class StandardObserver(_Observer):
             return 1
         return 2
 
-    def observe(self, agent, rail_env, rail_network) -> Tuple[ndarray, Dict[str, Any]]:
+    def observe(self, agent, env, rail_network: RailNetwork) -> Tuple[ndarray, Dict[str, Any]]:
         self.logger.debug(symmetric_string(f"obs {agent}", frame="~"))
         node_id = name2switch_id(agent)
         switch: _Switch = rail_network.get_switch_on_position(node_id)
@@ -135,60 +135,37 @@ class StandardObserver(_Observer):
         semaphore = []
         target = []
         delay = []
-        active_train = None
 
-        train_at_ports = {
-            rail_network.get_trains_next_port(train): train for train in rail_env.agents
-        }
-        logging_var = {k: t.handle for k, t in train_at_ports.items()}
-        self.logger.debug(f"train at ports {logging_var}")
+        train_at_ports = rail_network._train2next_port
+
+        # logging_var = {k: t.handle for k, t in train_at_ports.items()}
+        # self.logger.debug(f"train at ports {logging_var}")
         self.logger.debug(f"next port for each train: {rail_network._train2next_port}")
-        self.logger.debug(f"ports of switch: {agent} with position")
+        self.logger.debug(f"current agent: {agent} with position {switch.id}")
         train_counter = 0  # debugging
+        active_train_handle = env.active_train
+        train = env.rail_env.agents[active_train_handle]
+        
         for port in switch.get_port_nodes():  # Get port IDs of this node
             self.logger.debug(f"port {port} coming from cell {switch.switch_graph.nodes.data('rail_prev_node')[port]}")
             semaphore.append(switch.semaphores[port])
 
-            train = train_at_ports.get(port)
-            if train is None:
-                # train is not at requested port
-                delay.append(-1)
-                target.extend([-1, -1])  # 2D coordinates
-            else:
+            if train_at_ports[active_train_handle] == port:
+                current_port = port
                 delay.append(
-                    self._discretize_delay(train, self._compute_delay(rail_env, train))
+                    self._discretize_delay(train, self._compute_delay(env.rail_env, train))
                 )
                 target.extend(train.target)
                 train_counter += 1
-                active_train = train.handle
+            else:
+
+                self.logger.debug(f"no train at port {port}")
+                delay.append(-1)
+                target.extend([-1, -1])  # 2D coordinates
 
         if (
             train_counter == 0
         ):  
-            # there is no train at the port -> there is no point for observing it
-            import matplotlib.pyplot as plt
-            # from flatland.utils.rendertools import AgentRenderVariant
-            # import networkx as nx
-            # fig, (ax1, ax2) = plt.subplots(ncols=2)
-            # rgb = rail_env.render(
-            #     agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True
-            # )
-            # ax1.imshow(rgb)
-            # nx.draw(
-            #     rail_network.rail_graph.to_undirected(),
-            #     rail_network.rail_graph.nodes.data("position"),
-            #     with_labels=True,
-            #     node_color=dict(
-            #         rail_network.rail_graph.nodes.data(data="node_color")
-            #     ).values(),
-            #     edge_color="gray",
-            #     node_size=3,
-            #     font_size=5,
-            #     ax=ax2,
-            # )
-            # ax1.axis("off")
-            # ax2.axis("off")
-            # plt.show(block=False)
 
             # a = rail_env.render()
             # fig, ax = plt.subplots(figsize=(8,8))
@@ -210,7 +187,7 @@ class StandardObserver(_Observer):
         target = np.array(target).astype(int)
         delay = np.array(delay).astype(int)
         observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
-        info = {"action_mask": switch.get_action_mask(), "active_train": active_train}
+        info = {"action_mask": switch.get_action_mask(current_port), "active_train": active_train_handle}
         return observation, info
 
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):

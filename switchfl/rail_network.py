@@ -159,8 +159,8 @@ class RailNetwork:
         switch = self.get_switch_on_position(node_id)
         neighbor_node_id, neighbor_port_id = switch.port2neighbor[port]
         neighbor_switch = self.get_switch_on_position(neighbor_node_id)
-        if neighbor_switch is None:
-            neighbor_port_id = None
+        # if neighbor_switch is None:
+        #     neighbor_port_id = None
         return neighbor_switch, neighbor_port_id
 
     def get_switch_on_port(self, port: PortId) -> _Switch:
@@ -275,7 +275,7 @@ class RailNetwork:
         # In this case also the next semaphores have to be switched on
 
     def get_train_actions(
-        self, node: NodeId, action: int, train_agents: List[TrainAgent]
+        self, node: NodeId, action: int, active_train: TrainAgent
     ) -> Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
         """get the sequence of train actions from switch action and the train which is moving / transitioning over the switch
 
@@ -291,7 +291,7 @@ class RailNetwork:
                 - For each train at the switch return actions to perform
         """
         switch = self._pos2switch[node]
-        return switch.get_train_action(action, train_agents)
+        return switch.get_train_action(action, active_train, self._train2next_port)
 
     def get_switch_names(self) -> List[str]:
         """Get the names of all switches in the network.

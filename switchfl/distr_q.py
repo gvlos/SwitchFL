@@ -5,6 +5,12 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
+# class Grid4TransitionsEnum(IntEnum):
+#     NORTH = 0
+#     EAST = 1
+#     SOUTH = 2
+#     WEST = 3
+
 # DO_NOTHING: 0
 # MOVE_LEFT: 1
 # MOVE_FORWARD: 2
@@ -89,22 +95,14 @@ class DistrQLearning:
 
         for t in tqdm(range(num_episodes)):
 
-            self.env.reset(seed=self.seed * (t+1))
+            self.env.reset(seed=self.seed)
 
             update_dict = {}
+            num_iter = 0
+
+
 
             for agent in self.env.agent_iter():
-
-                # a = self.env.rail_env.render()
-                # fig, ax = plt.subplots(figsize=(8,8))
-                # plt.imshow(a)
-                # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-                # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-                # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
-                # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
-                # ax.set_xticklabels(np.arange(18))
-                # ax.set_yticklabels(np.arange(18))
-                # plt.show(block=True)
 
                 observation, reward, termination, truncation, info = self.env.last()
                 
@@ -117,6 +115,7 @@ class DistrQLearning:
                 # else:
                 #     action = self.max_action(observation, agent, info["action_mask"])
 
+                self.env.action_space(agent).seed(self.seed * (num_iter * t + 1))
                 action = self.env.action_space(agent).sample(info["action_mask"])
 
 
@@ -135,6 +134,18 @@ class DistrQLearning:
                 update_dict[(next_q_agent, active_train)] = (observation, action, agent)
                 
                 cum_reward += reward
+                num_iter += 1
+
+                # a = self.env.rail_env.render()
+                # fig, ax = plt.subplots(figsize=(8,8))
+                # plt.imshow(a)
+                # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+                # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
+                # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+                # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+                # ax.set_xticklabels(np.arange(18))
+                # ax.set_yticklabels(np.arange(18))
+                # plt.show(block=True)
 
 
         self.env.close()

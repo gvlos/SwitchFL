@@ -9,6 +9,9 @@ from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.rail_env import RailEnvActions
 from gymnasium import Space, spaces
 
+from flatland.envs.step_utils.states import TrainState
+
+
 from switchfl import NodeId, PortId, TrainAgentHandle
 from switchfl.utils.rail_graph import add_rail_actions
 from switchfl.utils.switch_agent import build_rail_action_map
@@ -98,18 +101,27 @@ class _Switch(ABC):
             return
         self.semaphores[port] = False
 
-    def get_action_mask(self) -> np.ndarray:
+    def get_action_mask(self, port: PortId) -> np.ndarray:
         """which actions are allowed wrt. incoming train semaphores
 
         Returns:
             np.ndarray: integer array. 1: action allowed, 0: action forbidden (n_actions, )
         """
-        mask = [self.semaphores[target] for _, target in self.action_outcomes]
-        mask = (~np.array(mask)).astype(np.int8)
+        mask_0 = []
+        for source, _ in self.action_outcomes:
+            if source == port:
+                mask_0.append(1)
+            else:
+                mask_0.append(0)
+
+        # mask = [self.semaphores[target] for _, target in self.action_outcomes]
+        # mask = (~np.array(mask)).astype(np.int8)
+        # mask = (~np.array(mask) & np.array(mask_0)).astype(np.int8)
+        mask = np.array(mask_0).astype(np.int8)
         return mask
 
     def get_train_action(
-        self, action: int, train_agents: List[TrainAgent]
+        self, action: int, active_train: int, train_to_port: Dict[TrainAgentHandle, PortId]
     ) -> Tuple[TrainAgent | None, Dict[TrainAgentHandle, List[RailEnvActions]]]:
         """For the given trains which are about to enter this switch, return the actions sequences for each train
 
@@ -123,30 +135,32 @@ class _Switch(ABC):
                     If all currently positioned trains have to wait -> return None.
                 - For each train at the switch return actions to perform
         """
-        _, target_port = self.action_outcomes[action]
-        if self.semaphores[target_port]:
-            raise RuntimeError(
-                f"Semaphore is blocked for action: {self.action_outcomes[action]}"
-            )
+        # if self.semaphores[target_port]:
+        #     raise RuntimeError(
+        #         f"Semaphore is blocked for action: {self.action_outcomes[action]}"
+        #     )
 
         result = {}
         moving_train = None
-        for train_agent in train_agents:
-            port_node = self._pos2port.get(train_agent.position)
-            if port_node is None:
-                # train is not at a port node
-                continue
-            actions = self.actions[action][port_node]
-            result[train_agent.handle] = actions
+
+        port_node = train_to_port.get(active_train)
+
+        # Only the train at this switch port can get an action
+        if port_node in self.actions[action]:
+            actions = self.actions[action][port_node].copy()
+            result[active_train] = actions
+        
             if actions[0] != RailEnvActions.STOP_MOVING:
-                moving_train = train_agent
+                moving_train = active_train
+                # if train_agents[handle].state == TrainState.MOVING:
+                #     moving_train = train_agents[handle]
 
         if len(result) == 0:
             print(
                 f"No train is at switch {self.id} for action {action}"
             )
 
-        # If only one train and it is STOP_MOVING
+        # If only one train and it is STOP_MOVING, make sure the STOP_MOVING is taken only once
         if (
             len(result) == 1
             and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
