@@ -95,6 +95,7 @@ class DistrQLearning:
 
         for t in tqdm(range(num_episodes)):
 
+
             self.env.reset(seed=self.seed)
 
             update_dict = {}

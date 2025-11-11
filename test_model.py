@@ -5,6 +5,17 @@ from switchfl.switch_env import ASyncSwitchEnv
 import matplotlib.pyplot as plt
 import numpy as np
 from switchfl.distr_q import DistrQLearning
+from flatland.envs.malfunction_generators import MalfunctionParameters, ParamMalfunctionGen
+
+
+
+stochastic_data = MalfunctionParameters(
+    malfunction_rate=0,  # Rate of malfunction occurence
+    min_duration=0,  # Minimal duration of malfunction
+    max_duration=0  # Max duration of malfunction
+)
+mf = ParamMalfunctionGen(stochastic_data)
+
 
 if __name__=='__main__':
 
@@ -21,9 +32,10 @@ if __name__=='__main__':
         ),
         line_generator=sparse_line_generator(seed=random_seed),
         number_of_agents=2,
+        malfunction_generator=mf
     )
 
-    env = ASyncSwitchEnv(rail_env, render_mode="human")
+    env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=1000)
 
     model = DistrQLearning(env=env,
                            gamma = 1.,
@@ -35,19 +47,7 @@ if __name__=='__main__':
                            seed = random_seed)
     
     
-    model.learn(num_episodes=10)
-    
-    a = env.rail_env.render()
-    fig, ax = plt.subplots(figsize=(8,8))
-    plt.imshow(a)
-    ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-    ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-    ax.xaxis.grid(True, which='major', color='black', linestyle='--')
-    ax.yaxis.grid(True, which='major', color='black', linestyle='--')
-    ax.set_xticklabels(np.arange(18))
-    ax.set_yticklabels(np.arange(18))
-    plt.show(block=True)
-
+    model.learn(num_episodes=100)
 
     model.save("distr_q_model.pkl")
 

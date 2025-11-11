@@ -256,6 +256,8 @@ class _SwitchEnv:
         """
         # NOTE: the time when the train departures is already taken into account
         train_actions = {}
+        train_new_positions = {}
+
         for train in self.rail_env.agents:
             handle = train.handle
             if self.train_done[handle]:
@@ -269,6 +271,31 @@ class _SwitchEnv:
                 # use predetermined action
                 train_actions[handle] = self.train_action_plan[handle].pop(0)
 
+            if train.position is not None:
+                (
+                    _,
+                    (new_position,
+                    _),
+                    transition_valid,
+                    _,
+                ) = self.rail_env.rail.check_action_on_agent(
+                    train_actions[handle],
+                    ((train.position),
+                    train.direction)
+                )
+                if transition_valid:
+                    train_new_positions[handle] = (new_position, True)
+                    self.logger.debug(
+                        f"Train {handle} has valid transition with action {train_actions[handle]}"
+                        f" from position {train.position} and direction {train.direction} to position {new_position}")
+                else:
+                    self.logger.debug(
+                        f"Train {handle} has INVALID transition with action {train_actions[handle]}"
+                        f" from position {train.position} and direction {train.direction} to position {new_position}")
+                    train_new_positions[handle] = (train.position, False)
+            
+
+
         # do rail env step
         (
             self.train_obs,
@@ -276,6 +303,19 @@ class _SwitchEnv:
             self.train_done,
             self.train_info,
         ) = self.rail_env.step(train_actions)
+
+
+        # Correct if flatland has stopped some trains that simultaneously try to enter the same cell
+        for train in self.rail_env.agents:
+            if train.handle in train_new_positions:
+                expected_pos = train_new_positions[train.handle][0]
+                transition_valid = train_new_positions[train.handle][1]
+                actual_pos = train.position
+                if expected_pos != actual_pos and transition_valid:
+                    self.logger.error(
+                        f"Train {train.handle} deviated from planned path! Expected pos: {expected_pos}, Actual pos: {actual_pos}"
+                    )
+                    self.train_action_plan[train.handle].insert(0, train_actions[train.handle])
 
         self.rail_env_time += 1
         self._check_action_execution()
