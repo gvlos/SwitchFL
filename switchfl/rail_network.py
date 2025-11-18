@@ -301,9 +301,6 @@ class RailNetwork:
                 if p in self.semaphores:
                     del self.semaphores[p]
 
-        if out_port == (33.2, 20.2) or target == (33.2, 20.2):
-            print("Eccolo")
-
         self.semaphores[out_port] = train.handle
         self.semaphores[target] = train.handle
 

@@ -4,6 +4,7 @@ from flatland.envs.line_generators import sparse_line_generator
 from switchfl.switch_env import ASyncSwitchEnv
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 from switchfl.distr_q import DistrQLearning
 from flatland.envs.malfunction_generators import MalfunctionParameters, ParamMalfunctionGen
 
@@ -18,6 +19,10 @@ mf = ParamMalfunctionGen(stochastic_data)
 
 
 if __name__=='__main__':
+
+    out_dir = '/home/gianvito/Desktop/prova'
+    os.makedirs(out_dir, exist_ok=True)
+
 
     # random_seed = 450565
     # rail_env = RailEnv(
@@ -63,8 +68,6 @@ if __name__=='__main__':
                            seed = random_seed)
     
     
-    model.learn(num_episodes=100)
+    model.learn(num_episodes=100, out_dir=out_dir)
 
-    model.save("distr_q_model.pkl")
-
-    # env.render()
+    model.save(os.path.join(out_dir, "distr_q_model.pkl"))

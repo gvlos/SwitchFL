@@ -15,10 +15,11 @@ from flatland.envs.step_utils.states import TrainState
 from flatland.utils.rendertools import AgentRenderVariant
 from pettingzoo import AECEnv
 from switchfl import NodeId, TrainAgentHandle
-from switchfl.observer import StandardObserver, _Observer
+from switchfl.observer import StandardObserver, _Observer, compute_delay
 from switchfl.rail_network import RailNetwork
 from switchfl.utils.logging import format_logger, set_seed
 from switchfl.utils.naming import name2switch_id, switch_id2name, symmetric_string, get_node_id_on_port_id
+from switchfl.reward_func import StandardRewardFunction
 
 
 class _SwitchEnv:
@@ -42,6 +43,7 @@ class _SwitchEnv:
         self.seed = seed
 
         self.rail_network = RailNetwork(rail_env)
+        self.reward_func = StandardRewardFunction(self.rail_env)
 
         self.observer = observer if observer is not None else StandardObserver()
         self.possible_agents = self.rail_network.get_switch_names()
@@ -131,6 +133,7 @@ class _SwitchEnv:
         self.active_train = None
 
         self.prev_actions = {train.handle: None for train in self.rail_env.agents}
+        self.train_to_last_node = {train.handle: (None, compute_delay(self.rail_env, train)) for train in self.rail_env.agents}
 
         self._move_trains_to_switch()
         self._init_semaphores()
@@ -289,12 +292,15 @@ class _SwitchEnv:
         
         self.logger.debug(f"existing plan: {self.train_action_plan}")
         self.logger.debug(f"new actions: {train_actions}")
+
+        # TODO: This for loop is USELESS, it enters only once
         for train_agent_handle in train_actions.keys():
             # adapt next train actions
             # NOTE: if two switches are direct neighbors, the first given train action for the moving train
             # has to be replaced by the last action of the train_action plan because otherwise the environment
             # will send the train forward which messes up the scheduling and planning
             next_train_actions = train_actions[train_agent_handle]
+            
             if (
                 moving_train is not None
                 # and self.rail_network.get_port_distance(out_port, next_port) == 0
@@ -306,6 +312,7 @@ class _SwitchEnv:
                 if len(self.train_action_plan[train_agent_handle]) > 1:
                     self.train_action_plan[train_agent_handle] = self.train_action_plan[train_agent_handle][:1] 
                 self.train_action_plan[train_agent_handle].extend(next_train_actions)
+
             # elif (
             #     moving_train is not None
             #     and len(self.train_action_plan[train_agent_handle]) > 0
@@ -326,6 +333,12 @@ class _SwitchEnv:
                 # self.train_action_plan[train_agent_handle].insert(1, RailEnvActions.MOVE_FORWARD)
             else:
                 self.train_action_plan[train_agent_handle].extend(next_train_actions)
+
+            reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle], self.train_action_plan[train_agent_handle], self.train_to_last_node)
+
+            self._cumulative_rewards[agent_selection] = reward
+            
+            self.train_to_last_node[train_agent_handle] = (node_id, curr_delay)
 
         self.logger.debug(f"updated_plan: {self.train_action_plan}")
         return next_switch.id
@@ -393,7 +406,7 @@ class _SwitchEnv:
                 if expected_pos != actual_pos and transition_valid:
 
                     if train_actions[train.handle] != RailEnvActions.STOP_MOVING:
-                        self.logger.error(
+                        self.logger.debug(
                             f"Train {train.handle} deviated from planned path! Expected pos: {expected_pos}, Actual pos: {actual_pos}"
                         )
                         self.train_action_plan[train.handle].insert(0, train_actions[train.handle])
@@ -641,15 +654,15 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
         while not (self.terminated or self.truncated):
             self.agent_selection = self.active_switch_agents.pop(0)
             self.active_train = self.active_trains.pop(0)
-            if len(self.active_switch_agents) == 0:
-                print('No active switch agents left!')
+            # if len(self.active_switch_agents) == 0:
+            #     print('No active switch agents left!')
             yield self.agent_selection
         if self.terminated:
-            self.logger.warning(
+            self.logger.debug(
                 "termination."
             )
         elif self.truncated:
-            self.logger.warning(
+            self.logger.debug(
                 "truncation."
             )
 
