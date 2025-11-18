@@ -19,23 +19,39 @@ mf = ParamMalfunctionGen(stochastic_data)
 
 if __name__=='__main__':
 
-    random_seed = 450565
+    # random_seed = 450565
+    # rail_env = RailEnv(
+    #     width=18,
+    #     height=18,
+    #     rail_generator=sparse_rail_generator(
+    #         max_num_cities=5,
+    #         grid_mode=True,
+    #         max_rails_between_cities=1,
+    #         max_rail_pairs_in_city=1,
+    #         seed=random_seed,
+    #     ),
+    #     line_generator=sparse_line_generator(seed=random_seed),
+    #     number_of_agents=2,
+    #     malfunction_generator=mf
+    # )
+
+    random_seed = 15
     rail_env = RailEnv(
-        width=18,
-        height=18,
+        width=40,
+        height=40,
         rail_generator=sparse_rail_generator(
-            max_num_cities=5,
+            max_num_cities=7,
             grid_mode=True,
             max_rails_between_cities=1,
             max_rail_pairs_in_city=1,
             seed=random_seed,
         ),
         line_generator=sparse_line_generator(seed=random_seed),
-        number_of_agents=2,
+        number_of_agents=5,
         malfunction_generator=mf
     )
 
-    env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=1000)
+    env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
 
     model = DistrQLearning(env=env,
                            gamma = 1.,
@@ -51,4 +67,4 @@ if __name__=='__main__':
 
     model.save("distr_q_model.pkl")
 
-    env.render()
+    # env.render()

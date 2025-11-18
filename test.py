@@ -50,6 +50,7 @@ if __name__=='__main__':
         ax.set_xticklabels(np.arange(18))
         ax.set_yticklabels(np.arange(18))
         plt.show(block=True)
+        plt.close()
 
         num_iter += 1
 

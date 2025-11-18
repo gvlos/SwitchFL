@@ -3,6 +3,8 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from flatland.utils.rendertools import AgentRenderVariant
+
 
 
 # class Grid4TransitionsEnum(IntEnum):
@@ -18,10 +20,10 @@ from tqdm import tqdm
 # STOP_MOVING: 4
 
 # directions
-# 1 = EAST
-# 2 = NORTH
-# 3 = WEST
-# 4 = SOUTH
+# .1 = EAST
+# .2 = NORTH
+# .3 = WEST
+# .4 = SOUTH
 
 class DistrQLearning:
     """
@@ -92,16 +94,14 @@ class DistrQLearning:
 
         cum_reward = 0.
 
+        rng = np.random.default_rng(self.seed)
 
         for t in tqdm(range(num_episodes)):
-
 
             self.env.reset(seed=self.seed)
 
             update_dict = {}
             num_iter = 0
-
-
 
             for agent in self.env.agent_iter():
 
@@ -116,7 +116,7 @@ class DistrQLearning:
                 # else:
                 #     action = self.max_action(observation, agent, info["action_mask"])
 
-                self.env.action_space(agent).seed(self.seed * (num_iter * t + 1))
+                self.env.action_space(agent).seed(int(rng.integers(0, np.iinfo(np.int32).max)))
                 action = self.env.action_space(agent).sample(info["action_mask"])
 
 
@@ -137,7 +137,7 @@ class DistrQLearning:
                 cum_reward += reward
                 num_iter += 1
 
-                # a = self.env.rail_env.render()
+                # a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
                 # fig, ax = plt.subplots(figsize=(8,8))
                 # plt.imshow(a)
                 # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
@@ -146,7 +146,21 @@ class DistrQLearning:
                 # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
                 # ax.set_xticklabels(np.arange(18))
                 # ax.set_yticklabels(np.arange(18))
-                # plt.show(block=True)
+                # plt.savefig(f"/home/gianvito/Desktop/snap_env2/episode_{t}_iter_{num_iter}.png", dpi=300)
+                # plt.close()
+
+                # if t==67:
+                #     a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
+                #     fig, ax = plt.subplots(figsize=(8,8))
+                #     plt.imshow(a)
+                #     ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/40), minor=False)
+                #     ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/40), minor=False)
+                #     ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+                #     ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+                #     ax.set_xticklabels(np.arange(40))
+                #     ax.set_yticklabels(np.arange(40))
+                #     plt.savefig(f"/home/gianvito/Desktop/snap_env2/episode_{t}_iter_{num_iter}.png", dpi=300)
+                #     plt.close()
 
 
         self.env.close()

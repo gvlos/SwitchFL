@@ -115,8 +115,15 @@ class RailNetwork:
         self._train_prev_port: Dict[int, PortId] = {
             train.handle: None for train in rail_env.agents
         }
+        self._train_source_port: Dict[int, PortId] = {
+            train.handle: None for train in rail_env.agents
+        }
+        
         """get the previous port the agent came from. 
         This dictionary changes after a train transition got determined by an agent."""
+
+        self.semaphores: Dict[PortId, bool] = {}
+        self.occupied_edges: Dict[tuple, int] = {}
 
     def reset(self):
         # reset all switches
@@ -127,6 +134,9 @@ class RailNetwork:
         self._train2next_port: Dict[int, PortId] = {
             handle: None for handle in self._train2next_port.keys()
         }
+
+        self.semaphores = {}
+        self.occupied_edges = {}
 
     def get_switch_on_position(self, switch: NodeId) -> _Switch | None:
         """get switch class for the corresponding position of the switch.
@@ -252,8 +262,9 @@ class RailNetwork:
         # find next switch with next port
         next_switch, target_port = self.get_neighbor_switch(out_port)
         # assign the semaphores
-        self.transition_semaphore(in_port, target_port)
+        self.transition_semaphore(in_port, out_port, target_port, train, next_switch)
         # the next port in self._train2next_port
+        self._train_source_port[train.handle] = in_port
         self.set_trains_next_port(train, target_port)
         self.set_trains_prev_port(train, out_port)
         self.logger.debug(
@@ -261,15 +272,103 @@ class RailNetwork:
         )
         return next_switch, target_port
 
-    def transition_semaphore(self, source: PortId, target: PortId):
+    def transition_semaphore(self, source: PortId, out_port: PortId, target: PortId, train: TrainAgent, next_switch: _Switch):
         """handle semaphore freeing and blocking if a train is moving from the given source port (source) and moving to the outgoing port.
 
         Args:
             source (PortId): the port a train entered a switch
             target (PortId): the port through a train will enter next
         """
-        self.free_semaphore(source)
-        self.block_semaphore(target)
+        # self.free_semaphore(source)
+        # self.block_semaphore(target)
+
+        # if next_switch.id == (20,6):
+        #     self.logger.debug("Eccolo")
+
+        # if source in self.semaphores:
+        #     del self.semaphores[source]
+        #     switch = self.get_switch_on_port(source)
+        #     for port in switch.get_port_nodes():
+        #         if port in self.semaphores:
+        #             del self.semaphores[port]
+
+        for p in self.get_switch_on_port(self._train2next_port[train.handle]).get_port_nodes():
+            if p in self.semaphores:
+                del self.semaphores[p]
+
+        if self._train_prev_port[train.handle] is not None:
+            for p in self.get_switch_on_port(self._train_prev_port[train.handle]).get_port_nodes():
+                if p in self.semaphores:
+                    del self.semaphores[p]
+
+        if out_port == (33.2, 20.2) or target == (33.2, 20.2):
+            print("Eccolo")
+
+        self.semaphores[out_port] = train.handle
+        self.semaphores[target] = train.handle
+
+        # delete previously occupied edges
+        if len(self.occupied_edges) > 0:
+            edge_list = []
+            for edge in self.rail_graph.edges:
+                if edge[0] == source or edge[1] == source:
+                    edge_list.append(edge)
+            for edge in edge_list:
+                if edge in self.occupied_edges:
+                    del self.occupied_edges[edge]
+
+        # find all edges related to target
+        edge_list = []
+        for edge in self.rail_graph.edges:
+            if edge[0] == target or edge[1] == target:
+                edge_list.append(edge)
+
+        # find the current active edge and set it as occupied
+        for edge in edge_list:
+            if edge[0] == out_port or edge[1] == out_port:
+                moving_edge = edge
+        edge_list.remove(moving_edge)
+
+        new_edges = {}
+
+        new_edges[moving_edge] = train.handle
+
+        # if there is only one port at the end of the edge, find the next edge and add it to the occupied edges
+        if len(edge_list) == 1:
+            unique_port = edge_list[0][0] if edge_list[0][0] != target else edge_list[0][1]
+            prox_list = []
+            for edge in self.rail_graph.edges:
+                if edge[0] == unique_port or edge[1] == unique_port:
+                    prox_list.append(edge)
+            edges_toremove = []
+            for edge in prox_list:
+                if get_node_id_on_port_id(edge[0]) == next_switch.id and get_node_id_on_port_id(edge[1]) == next_switch.id:
+                    edges_toremove.append(edge)
+            for edge in edges_toremove:
+                prox_list.remove(edge)
+            new_edges[edge_list[0]] = train.handle
+            new_edges[prox_list[0]] = train.handle
+
+
+        # count = 0
+        # for p, np in next_switch.action_outcomes:
+        #     if p == target:
+        #         count += 1
+        #         next_port = np
+        # if count == 1:
+        #     _, successor_port = self.get_neighbor_switch(next_port)
+        #     self.semaphores[successor_port] = train.handle
+        # elif next_port in self.semaphores:
+        #     del self.semaphores[next_port]
+
+        for edge in new_edges:
+            for port in edge:
+                if port not in self.semaphores.keys() and port != source and port != out_port:
+                    self.semaphores[port] = train.handle
+
+        self.occupied_edges.update(new_edges)
+
+        self.logger.debug(f"CURRENT SEMAPHORES: {self.semaphores}")
 
         # TODO account for the case where the next switch is a simple intersections.
         # In this case also the next semaphores have to be switched on

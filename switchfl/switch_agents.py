@@ -101,7 +101,7 @@ class _Switch(ABC):
             return
         self.semaphores[port] = False
 
-    def get_action_mask(self, port: PortId) -> np.ndarray:
+    def get_action_mask(self, port: PortId, semaphore) -> np.ndarray:
         """which actions are allowed wrt. incoming train semaphores
 
         Returns:
@@ -114,10 +114,43 @@ class _Switch(ABC):
             else:
                 mask_0.append(0)
 
-        # mask = [self.semaphores[target] for _, target in self.action_outcomes]
+        mask_1 = []
+        ports = self.get_port_nodes()
+        semaphore_dict = dict(zip(ports, semaphore))
+
+        for _, target in self.action_outcomes:
+            mask_1.append(semaphore_dict[target])
+
+        # stop action is always valid
+        mask_0.append(1)
+        mask_1.append(1)
+        
+
+        # mask_1 = []      
+        # for source, _ in self.action_outcomes:
+        #     blocked = False
+        #     for p, n in self.port2neighbor.items():
+        #         if p == source:
+        #             _, successor_port = rail_network.get_neighbor_switch(p)
+        #             if successor_port in semaphores.keys():
+        #                 if semaphores[successor_port] != train:
+        #                     blocked = True
+        #                 else:
+        #                     blocked = False
+        #     if blocked:
+        #         mask_1.append(0)
+        #     else:
+        #         mask_1.append(1) 
+
+
+        # mask = np.array(mask_0).astype(np.int8)
+
+        # mask = [self.semaphores[target] for _ , target in self.action_outcomes]
         # mask = (~np.array(mask)).astype(np.int8)
         # mask = (~np.array(mask) & np.array(mask_0)).astype(np.int8)
-        mask = np.array(mask_0).astype(np.int8)
+        
+        mask = (np.array(mask_0) & np.array(mask_1)).astype(np.int8)
+
         return mask
 
     def get_train_action(
@@ -146,14 +179,17 @@ class _Switch(ABC):
         port_node = train_to_port.get(active_train)
 
         # Only the train at this switch port can get an action
-        if port_node in self.actions[action]:
-            actions = self.actions[action][port_node].copy()
-            result[active_train] = actions
-        
-            if actions[0] != RailEnvActions.STOP_MOVING:
-                moving_train = active_train
-                # if train_agents[handle].state == TrainState.MOVING:
-                #     moving_train = train_agents[handle]
+        if action == len(self.actions):
+            result[active_train] = [RailEnvActions.STOP_MOVING]
+        else:
+            if port_node in self.actions[action]:
+                actions = self.actions[action][port_node].copy()
+                result[active_train] = actions
+            
+                if actions[0] != RailEnvActions.STOP_MOVING:
+                    moving_train = active_train
+                    # if train_agents[handle].state == TrainState.MOVING:
+                    #     moving_train = train_agents[handle]
 
         if len(result) == 0:
             print(
@@ -161,11 +197,11 @@ class _Switch(ABC):
             )
 
         # If only one train and it is STOP_MOVING, make sure the STOP_MOVING is taken only once
-        if (
-            len(result) == 1
-            and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
-        ):
-            result[next(iter(result))] = [RailEnvActions.STOP_MOVING]
+        # if (
+        #     len(result) == 1
+        #     and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
+        # ):
+        #     result[next(iter(result))] = [RailEnvActions.STOP_MOVING]
         return moving_train, result
 
     def get_port_nodes(self) -> List[PortId]:
@@ -202,7 +238,7 @@ class Switch1(_Switch):
         # w  w  g1
         # w  w  g2
         # can have a different permutation based on orientation
-        return spaces.Discrete(4, seed=seed)
+        return spaces.Discrete(5, seed=seed)
 
 
 # Intersection
@@ -217,7 +253,7 @@ class Switch2(_Switch):
         # ----------
         # g  w  g  w
         # w  g  w  g
-        return spaces.Discrete(2, seed=seed)
+        return spaces.Discrete(3, seed=seed)
 
 
 # Intersection with one pass
@@ -236,7 +272,7 @@ class Switch3(_Switch):
         # w  w  g  w
         # w  w  w  g1
         # w  w  w  g2
-        return spaces.Discrete(6, seed=seed)
+        return spaces.Discrete(7, seed=seed)
 
 
 # Intersection with two passes
@@ -257,7 +293,7 @@ class Switch4(_Switch):
         # w  w  g2 w
         # w  w  w  g1
         # w  w  w  g2
-        return spaces.Discrete(8, seed=seed)
+        return spaces.Discrete(9, seed=seed)
 
 
 SWITCH_AGENT_MAP = {
