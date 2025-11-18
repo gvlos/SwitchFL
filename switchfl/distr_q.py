@@ -78,7 +78,7 @@ class DistrQLearning:
         """
         self.lr[agent] = self.lr[agent] * (self.lr_decay_rate ** episode)
 
-    def learn(self, num_episodes: int, out_dir: str):
+    def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int):
         """
         Placeholder for the learning method.
 
@@ -95,6 +95,9 @@ class DistrQLearning:
         rng = np.random.default_rng(self.seed)
 
         for t in range(num_episodes):
+
+            if (t+1) % checkpoint_freq == 0:
+                self.save(os.path.join(out_dir, f"checkpoint_{t+1}.pkl"))
 
             self.env.reset(seed=self.seed)
 

@@ -68,6 +68,6 @@ if __name__=='__main__':
                            seed = random_seed)
     
     
-    model.learn(num_episodes=100, out_dir=out_dir)
+    model.learn(num_episodes=100, out_dir=out_dir, checkpoint_freq=100_000)
 
     model.save(os.path.join(out_dir, "distr_q_model.pkl"))

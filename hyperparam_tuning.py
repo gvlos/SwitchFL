@@ -1,73 +1,13 @@
 import configparser
 import os
-from flatland.envs.rail_env import RailEnv
-from flatland.envs.rail_generators import sparse_rail_generator
-from flatland.envs.line_generators import sparse_line_generator
-from switchfl.switch_env import ASyncSwitchEnv
-import matplotlib.pyplot as plt
-import numpy as np
-import os
-from switchfl.distr_q import DistrQLearning
-from flatland.envs.malfunction_generators import MalfunctionParameters, ParamMalfunctionGen
 import subprocess
 from itertools import product
-import time
-
-
-def launch_experiment(config_path):
-    start_time = time.time()
-    config = configparser.ConfigParser()
-    config.read(config_path)
-
-    out_dir = config["MISC"]["out_dir"]
-
-    stochastic_data = MalfunctionParameters(
-        malfunction_rate=float(config["ENV"]["malfunction_rate"]),  # Rate of malfunction occurence
-        min_duration=int(config["ENV"]["min_duration"]),  # Minimal duration of malfunction
-        max_duration=int(config["ENV"]["max_duration"])  # Max duration of malfunction
-    )
-    mf = ParamMalfunctionGen(stochastic_data)
-
-
-    random_seed = config["MISC"]["random_seed"]
-    rail_env = RailEnv(
-        width=config["ENV"]["width"],
-        height=config["ENV"]["height"],
-        rail_generator=sparse_rail_generator(
-            max_num_cities=config["ENV"]["max_num_cities"],
-            grid_mode=True,
-            max_rails_between_cities=config["ENV"]["max_rails_between_cities"],
-            max_rail_pairs_in_city=config["ENV"]["max_rail_pairs_in_city"],
-            seed=config["MISC"]["random_seed"],
-        ),
-        line_generator=sparse_line_generator(seed=config["MISC"]["random_seed"]),
-        number_of_agents=config["ENV"]["number_of_agents"],
-        malfunction_generator=mf
-    )
-
-    env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
-
-    model = DistrQLearning(env=env,
-                        gamma = config["MODEL"]["gamma"],
-                        epsilon = config["MODEL"]["epsilon"],
-                        epsilon_decay_rate = config["MODEL"]["epsilon_decay_rate"],
-                        lr = config["MODEL"]["lr"],
-                        lr_decay_rate = config["MODEL"]["lr_decay_rate"],
-                        default_q = config["MODEL"]["default_q"],
-                        seed = config["MISC"]["random_seed"])
-    
-    
-    model.learn(num_episodes=config["MODEL"]["num_episodes"], out_dir=out_dir)
-
-    model.save(os.path.join(out_dir, "distr_q_model.pkl"))
-
-    elapsed_time = time.time() - start_time
-    return elapsed_time
 
 if __name__=='__main__':
     
     random_seed = 15
     out_dir = "/home/gianvito/Desktop/test_config"
+    checkpoint_freq = 50
 
     width = 40
     height = 40
@@ -103,7 +43,8 @@ if __name__=='__main__':
 
         config["MISC"] = {
             "random_seed" : random_seed,
-            "out_dir" : exp_dir
+            "out_dir" : exp_dir,
+            "checkpoint_freq" : checkpoint_freq
         }
 
         config["ENV"] = {
