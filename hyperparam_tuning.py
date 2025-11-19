@@ -5,25 +5,35 @@ from itertools import product
 
 if __name__=='__main__':
     
-    random_seed = 15
-    out_dir = "/home/gianvito/Desktop/test_config"
-    checkpoint_freq = 50
+    random_seed = 450565
+    out_dir = "/home/gianvito/Desktop/debug_q_learning"
+    checkpoint_freq = 100_000
 
-    width = 40
-    height = 40
-    max_num_cities = 7
+    # width = 40
+    # height = 40
+    # max_num_cities = 7
+    # max_rails_between_cities = 1
+    # max_rail_pairs_in_city = 1
+    # number_of_agents = 5
+    # malfunction_rate = 0.
+    # min_duration = 0
+    # max_duration = 0
+
+    width = 18
+    height = 18
+    max_num_cities = 5
     max_rails_between_cities = 1
     max_rail_pairs_in_city = 1
-    number_of_agents = 5
+    number_of_agents = 2
     malfunction_rate = 0.
     min_duration = 0
     max_duration = 0
 
     hyperparams = {
-        "epsilon" : [0.7, 0.4],
-        "epsilon_decay_rate" : [0.],
-        "lr" : [0.4],
-        "lr_decay_rate" : [0.],
+        "epsilon" : [1.0],
+        "epsilon_decay_rate" : [0.9999],
+        "lr" : [0.1],
+        "lr_decay_rate" : [0.9999],
     }
 
     gamma = 1.

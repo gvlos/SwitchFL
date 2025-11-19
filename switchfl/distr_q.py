@@ -2,6 +2,9 @@ from .switch_env import ASyncSwitchEnv, name2switch_id, switch_id2name
 import numpy as np
 import pickle
 import os
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+from flatland.utils.rendertools import AgentRenderVariant
 
 # class Grid4TransitionsEnum(IntEnum):
 #     NORTH = 0
@@ -35,8 +38,10 @@ class DistrQLearning:
     def __init__(self, env : ASyncSwitchEnv, gamma = 1., epsilon = 0.4, epsilon_decay_rate = 0., lr = 0.4, lr_decay_rate = 0., default_q = 0., seed = 450565):
         self.env = env  # Environment to interact with
         self.gamma = gamma
+        self.initial_epsilon = epsilon
         self.epsilon = {agent: epsilon for agent in self.env.agents}
         self.epsilon_decay_rate = epsilon_decay_rate
+        self.initial_lr = lr
         self.lr = {agent: lr for agent in self.env.agents}
         self.lr_decay_rate = lr_decay_rate
         self.default = [default_q] # MISSING NUMBER OF ACTIONS
@@ -56,7 +61,7 @@ class DistrQLearning:
         if tuple(state) not in self.q_table:
             self.q_table[tuple(state)] = self.default * self.env.action_space(agent).n
 
-    def __decay_epsilon(self, agent, episode):
+    def __decay_epsilon(self, agent, t):
         """
         Decays the epsilon value.
 
@@ -65,9 +70,9 @@ class DistrQLearning:
         episode : int
             The episode number.
         """
-        self.epsilon[agent] = self.epsilon[agent] * (self.epsilon_decay_rate ** episode)
+        self.epsilon[agent] = self.initial_epsilon * (self.epsilon_decay_rate ** t)
 
-    def __decay_lr(self, agent, episode):
+    def __decay_lr(self, agent, t):
         """
         Decays the learning rate.
 
@@ -76,7 +81,45 @@ class DistrQLearning:
         episode : int
             The episode number.
         """
-        self.lr[agent] = self.lr[agent] * (self.lr_decay_rate ** episode)
+        self.lr[agent] = self.initial_lr * (self.lr_decay_rate ** t)
+
+    def test(self, out_dir=None, plot=False):
+    
+        out_dir = os.path.join(out_dir, "eval")
+        os.makedirs(out_dir, exist_ok=True)
+        self.env.reset(seed=self.seed)
+
+        num_iter = 0
+        cum_reward = 0.
+        for agent in self.env.agent_iter():
+
+            observation, reward, termination, truncation, info = self.env.last()
+            
+            if termination or truncation:
+                break
+            
+            action = self.max_action(observation, agent, info["action_mask"])
+
+            self.env.step(action)
+
+            if plot:
+                a = self.env.rail_env.render()
+                fig, ax = plt.subplots(figsize=(8,8))
+                plt.imshow(a)
+                ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.width), minor=False)
+                ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.height), minor=False)
+                ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+                ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+                ax.set_xticklabels(np.arange(self.env.rail_env.width))
+                ax.set_yticklabels(np.arange(self.env.rail_env.height))
+                plt.savefig(os.path.join(out_dir, f"iter_{num_iter}.png"), dpi=300)
+                plt.close()
+
+            num_iter += 1
+            cum_reward += reward
+
+        self.env.close()
+        print(f"Terminated in {num_iter} steps ({self.env.rail_env._elapsed_steps} flatland steps), cumulative reward = {cum_reward}")
 
     def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int):
         """
@@ -90,14 +133,16 @@ class DistrQLearning:
 
         cum_reward = np.zeros(num_episodes)
         arrived_trains = np.zeros(num_episodes)
-        agent_num_episodes = {agent: 0 for agent in self.env.agents}
+        agent_num_interactions = {agent: 0 for agent in self.env.agents}
 
         rng = np.random.default_rng(self.seed)
 
-        for t in range(num_episodes):
+        for t in tqdm(range(num_episodes)):
 
             if (t+1) % checkpoint_freq == 0:
                 self.save(os.path.join(out_dir, f"checkpoint_{t+1}.pkl"))
+                np.savez_compressed(os.path.join(out_dir, f'cum_reward_checkpoint_{t+1}.npz'), x=cum_reward)
+                np.savez_compressed(os.path.join(out_dir, f'arrived_trains_checkpoint_{t+1}.npz'), x=arrived_trains)
 
             self.env.reset(seed=self.seed)
 
@@ -111,7 +156,7 @@ class DistrQLearning:
                 if termination or truncation:
                     break
 
-                self.__decay_epsilon(agent, agent_num_episodes[agent])
+                self.__decay_epsilon(agent, agent_num_interactions[agent])
                 if rng.random() < self.epsilon[agent]:
                     self.env.action_space(agent).seed(int(rng.integers(0, np.iinfo(np.int32).max)))
                     action = self.env.action_space(agent).sample(info["action_mask"])
@@ -121,23 +166,26 @@ class DistrQLearning:
                 post_step_info = self.env.step(action)
                 active_train = info["active_train"]
 
+                agent_id = name2switch_id(agent)
                 # Può accadere che le observation consecutive sono di switch non consecutivi quindi bisogna selezionare l'observation giusta per fare l'update
-                if (agent, active_train) in update_dict:
-                    previous_obs = update_dict[agent][0]
-                    previous_act = update_dict[agent][1]
-                    previous_agent = update_dict[agent][2]
+                if (agent_id, active_train) in update_dict:
+                    previous_obs = update_dict[(agent_id, active_train)][0]
+                    previous_act = update_dict[(agent_id, active_train)][1]
+                    previous_agent = update_dict[(agent_id, active_train)][2]
+                    print("---------------------------------------------------")
+                    print(f"Updating Q-values: agent={previous_agent}, obs={previous_obs}, act={previous_act} with reward={reward}, next state={observation}, next_agent={agent}")
                     self.update(state=previous_obs, action=previous_act,
                                 reward=reward, next_state=observation,
                                 previous_agent=previous_agent,
                                 next_agent=agent,
-                                agent_num_episodes=agent_num_episodes)
+                                agent_num_interactions=agent_num_interactions)
 
                 next_q_agent = post_step_info["next_switch"]
                 update_dict[(next_q_agent, active_train)] = (observation, action, agent)
                 
                 cum_reward[t] += reward
                 num_iter += 1
-                agent_num_episodes[agent] += 1
+                agent_num_interactions[agent] += 1
 
                 # a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
                 # fig, ax = plt.subplots(figsize=(8,8))
@@ -151,7 +199,7 @@ class DistrQLearning:
                 # plt.savefig(f"/home/gianvito/Desktop/snap_env2/episode_{t}_iter_{num_iter}.png", dpi=300)
                 # plt.close()
 
-                # if t==67:
+                # if t==10:
                 #     a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
                 #     fig, ax = plt.subplots(figsize=(8,8))
                 #     plt.imshow(a)
@@ -201,7 +249,7 @@ class DistrQLearning:
         self.__check_entry(state, agent)
         return self.q_table[tuple(state)][action]
 
-    def update(self, state, action, reward, next_state, previous_agent, next_agent, agent_num_episodes):
+    def update(self, state, action, reward, next_state, previous_agent, next_agent, agent_num_interactions):
         """
         Updates the Q-value of a state-action pair.
 
@@ -220,12 +268,15 @@ class DistrQLearning:
         """
         self.__check_entry(state, previous_agent)
 
-        self.__decay_lr(previous_agent, agent_num_episodes[previous_agent])
+        self.__decay_lr(previous_agent, agent_num_interactions[previous_agent])
 
+        print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
         self.q_table[tuple(state)][action] = \
             (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
             self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
-        
+        print(f"New Q-entry: {self.q_table[tuple(state)]}")
+        print("")
+
     def max_q(self, state, agent):
         """
         Returns the maximum Q-value of a state.
@@ -285,7 +336,7 @@ class DistrQLearning:
         elif mode == 'parquet':
             self.__dump_parquet(filename)
 
-    def load(filename: str):
+    def load(self, filename: str):
         """
         Loads the agent from a file (pickle).
         
@@ -294,7 +345,7 @@ class DistrQLearning:
         filename : str
             The name of the file.
         """
-        return DistrQLearning.__load_pickle(filename)
+        return self.__load_pickle(filename)
 
     def __dump_pickle(self, filename: str):
         with open(filename, 'wb') as f:

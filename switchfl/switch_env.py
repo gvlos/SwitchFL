@@ -406,12 +406,13 @@ class _SwitchEnv:
                 if expected_pos != actual_pos and transition_valid:
 
                     if train_actions[train.handle] != RailEnvActions.STOP_MOVING:
-                        self.logger.debug(
+                        self.logger.warning(
                             f"Train {train.handle} deviated from planned path! Expected pos: {expected_pos}, Actual pos: {actual_pos}"
                         )
                         self.train_action_plan[train.handle].insert(0, train_actions[train.handle])
-                        source_port = self.rail_network._train_source_port[train.handle]
-                        self.rail_network.set_trains_next_port(train, source_port)
+                        if self.rail_network.get_switch_on_position(expected_pos) is not None:
+                            source_port = self.rail_network._train_source_port[train.handle]
+                            self.rail_network.set_trains_next_port(train, source_port)
             
             # Reset semaphores of trains that have arrived
             if self.train_done[train.handle]:
