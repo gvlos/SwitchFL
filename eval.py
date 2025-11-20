@@ -13,13 +13,13 @@ import argparse
 
 if __name__=='__main__':
 
-    config_path = "/home/gianvito/Desktop/test/exp_0/config.ini"
-    model_path = "/home/gianvito/Desktop/test/exp_0/checkpoint_200000.pkl"
+    config_path = "/home/gianvito/Desktop/debug_q_learning/exp_0/config.ini"
+    model_path = "/home/gianvito/Desktop/debug_q_learning/exp_0/distr_q_model.pkl"
+    out_dir = "/home/gianvito/Desktop/debug_q_learning/exp_0"
 
     config = configparser.ConfigParser()
     config.read(config_path)
 
-    out_dir = config["MISC"]["out_dir"]
     checkpoint_freq = int(config["MISC"]["checkpoint_freq"])
 
     stochastic_data = MalfunctionParameters(
@@ -58,4 +58,4 @@ if __name__=='__main__':
                         seed = int(config["MISC"]["random_seed"]))
     
     model.load(model_path)
-    model.test(out_dir=config["MISC"]["out_dir"], plot=True)
+    model.test(out_dir=out_dir, plot=True)

@@ -133,7 +133,8 @@ class _SwitchEnv:
         self.active_train = None
 
         self.prev_actions = {train.handle: None for train in self.rail_env.agents}
-        self.train_to_last_node = {train.handle: (None, compute_delay(self.rail_env, train)) for train in self.rail_env.agents}
+        self.train_to_last_node = {train.handle: (None, compute_delay(
+            self.rail_env, train, train.initial_position, train.initial_direction)) for train in self.rail_env.agents}
 
         self._move_trains_to_switch()
         self._init_semaphores()
@@ -232,7 +233,7 @@ class _SwitchEnv:
 
         node_id = name2switch_id(agent_selection)
 
-        # if node_id == (20,24):
+        # if node_id == (13,6):
         #     print("Eccolo")
 
         current_switch = self.rail_network.get_switch_on_position(node_id)
@@ -334,9 +335,23 @@ class _SwitchEnv:
             else:
                 self.train_action_plan[train_agent_handle].extend(next_train_actions)
 
-            reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle], self.train_action_plan[train_agent_handle], self.train_to_last_node)
 
-            self._cumulative_rewards[agent_selection] = reward
+            port_blocked = False
+            if next_port is not None:
+                if next_port in self.rail_network.semaphores:
+                    if self.rail_network.semaphores[next_port] != train_agent_handle:
+                        port_blocked = True
+            if not port_blocked:
+                if out_port in self.rail_network.semaphores:
+                    if self.rail_network.semaphores[out_port] != train_agent_handle:
+                        port_blocked = True
+
+            reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
+                                                  self.train_action_plan[train_agent_handle],
+                                                  self.train_to_last_node,
+                                                  port_blocked)
+
+            self._cumulative_rewards[switch_id2name(next_switch.id)] = reward
             
             self.train_to_last_node[train_agent_handle] = (node_id, curr_delay)
 
@@ -406,7 +421,7 @@ class _SwitchEnv:
                 if expected_pos != actual_pos and transition_valid:
 
                     if train_actions[train.handle] != RailEnvActions.STOP_MOVING:
-                        self.logger.warning(
+                        self.logger.debug(
                             f"Train {train.handle} deviated from planned path! Expected pos: {expected_pos}, Actual pos: {actual_pos}"
                         )
                         self.train_action_plan[train.handle].insert(0, train_actions[train.handle])
@@ -691,8 +706,11 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
             }
             self.truncated = True
 
+        arrived_trains = [train.handle for train in self.rail_env.agents \
+                          if train.position == None]
+
         # prepare info dict
-        post_step_info = {"next_switch": next_switch}
+        post_step_info = {"next_switch": next_switch, "arrived_trains" : arrived_trains}
         return post_step_info
 
     def observe(self, agent) -> np.ndarray:

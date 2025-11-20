@@ -5,32 +5,32 @@ from itertools import product
 
 if __name__=='__main__':
     
-    random_seed = 450565
-    out_dir = "/home/gianvito/Desktop/debug_q_learning"
-    checkpoint_freq = 100_000
+    random_seed = 13
+    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2"
+    checkpoint_freq = 10000
 
-    # width = 40
-    # height = 40
-    # max_num_cities = 7
-    # max_rails_between_cities = 1
-    # max_rail_pairs_in_city = 1
-    # number_of_agents = 5
-    # malfunction_rate = 0.
-    # min_duration = 0
-    # max_duration = 0
-
-    width = 18
-    height = 18
-    max_num_cities = 5
+    width = 40
+    height = 40
+    max_num_cities = 7
     max_rails_between_cities = 1
     max_rail_pairs_in_city = 1
-    number_of_agents = 2
+    number_of_agents = 5
     malfunction_rate = 0.
     min_duration = 0
     max_duration = 0
 
+    # width = 18
+    # height = 18
+    # max_num_cities = 5
+    # max_rails_between_cities = 1
+    # max_rail_pairs_in_city = 1
+    # number_of_agents = 2
+    # malfunction_rate = 0.
+    # min_duration = 0
+    # max_duration = 0
+
     hyperparams = {
-        "epsilon" : [1.0],
+        "epsilon" : [0.7],
         "epsilon_decay_rate" : [0.9999],
         "lr" : [0.1],
         "lr_decay_rate" : [0.9999],
@@ -39,7 +39,7 @@ if __name__=='__main__':
     gamma = 1.
     default_q = 0.
 
-    num_episodes = 100
+    num_episodes = 10
 
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 
                         for values in product(*hyperparams.values())))

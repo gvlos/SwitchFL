@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 from switchfl.observer import compute_delay
+from flatland.envs.rail_env import RailEnvActions
 
 
 class _RewardFunction(ABC):
@@ -18,7 +19,7 @@ class StandardRewardFunction(_RewardFunction):
         self.rail_env = rail_env
         self.destination_bonus = 200
 
-    def __call__(self, train, train_actions, train_to_last_node):
+    def __call__(self, train, train_actions, train_to_last_node, port_blocked):
         """
         Updates the rewards based on the current state of the environment
         """
@@ -28,26 +29,29 @@ class StandardRewardFunction(_RewardFunction):
         new_direction = train.direction
 
         for action in train_actions:
-            (
-                _,
-                (new_position,
-                new_direction),
-                _,
-                _,
-            ) = self.rail_env.rail.check_action_on_agent(
-                action,
-                ((new_position),
-                new_direction)
-            )
+            if action != RailEnvActions.STOP_MOVING:
+                (
+                    _,
+                    (new_position,
+                    new_direction),
+                    _,
+                    _,
+                ) = self.rail_env.rail.check_action_on_agent(
+                    action,
+                    ((new_position),
+                    new_direction)
+                )
 
+        curr_delay = compute_delay(self.rail_env, train, new_position, new_direction)
         if new_position == train.target:
-            return self.destination_bonus, 0
+            return self.destination_bonus, curr_delay
 
-        curr_delay = compute_delay(self.rail_env, train)
-            
-        _, last_delay = train_to_last_node[train.handle]
-                
-        reward = last_delay - curr_delay
-            
-        return reward, curr_delay
+        if port_blocked:
+            return 0, curr_delay
+        else:
+            _, last_delay = train_to_last_node[train.handle]
+                    
+            delay_diff = last_delay - curr_delay
+        
+            return delay_diff, curr_delay
 

@@ -137,7 +137,7 @@ class DistrQLearning:
 
         rng = np.random.default_rng(self.seed)
 
-        for t in tqdm(range(num_episodes)):
+        for t in range(num_episodes):
 
             if (t+1) % checkpoint_freq == 0:
                 self.save(os.path.join(out_dir, f"checkpoint_{t+1}.pkl"))
@@ -172,13 +172,14 @@ class DistrQLearning:
                     previous_obs = update_dict[(agent_id, active_train)][0]
                     previous_act = update_dict[(agent_id, active_train)][1]
                     previous_agent = update_dict[(agent_id, active_train)][2]
-                    print("---------------------------------------------------")
-                    print(f"Updating Q-values: agent={previous_agent}, obs={previous_obs}, act={previous_act} with reward={reward}, next state={observation}, next_agent={agent}")
+                    # print("---------------------------------------------------")
+                    # print(f"Updating Q-values: agent={previous_agent}, obs={previous_obs}, act={previous_act} with reward={reward}, next state={observation}, next_agent={agent}")
                     self.update(state=previous_obs, action=previous_act,
                                 reward=reward, next_state=observation,
                                 previous_agent=previous_agent,
                                 next_agent=agent,
                                 agent_num_interactions=agent_num_interactions)
+                    del update_dict[agent_id, active_train]
 
                 next_q_agent = post_step_info["next_switch"]
                 update_dict[(next_q_agent, active_train)] = (observation, action, agent)
@@ -212,7 +213,7 @@ class DistrQLearning:
                 #     plt.savefig(f"/home/gianvito/Desktop/snap_env2/episode_{t}_iter_{num_iter}.png", dpi=300)
                 #     plt.close()
 
-            arrived_trains[t] = len(info["arrived_trains"])
+            arrived_trains[t] = len(post_step_info["arrived_trains"])
 
         np.savez_compressed(os.path.join(out_dir, 'cum_reward.npz'), x=cum_reward)
         np.savez_compressed(os.path.join(out_dir, 'arrived_trains.npz'), x=arrived_trains)
@@ -270,12 +271,12 @@ class DistrQLearning:
 
         self.__decay_lr(previous_agent, agent_num_interactions[previous_agent])
 
-        print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
+        # print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
         self.q_table[tuple(state)][action] = \
             (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
             self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
-        print(f"New Q-entry: {self.q_table[tuple(state)]}")
-        print("")
+        # print(f"New Q-entry: {self.q_table[tuple(state)]}")
+        # print("")
 
     def max_q(self, state, agent):
         """

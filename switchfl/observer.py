@@ -14,7 +14,7 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 import numpy as np
 
-def compute_delay(rail_env: RailEnv, train: TrainAgent):
+def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction):
     """
     Returns the delay of the given train
 
@@ -24,14 +24,19 @@ def compute_delay(rail_env: RailEnv, train: TrainAgent):
     Returns:
         int: The delay of the given train
     """
-    row, col = (
-        train.position if train.position is not None else train.initial_position
-    )
+    # row, col = (
+    #     train.position if train.position is not None else train.initial_position
+    # )
+
+    row, col = position
+
     min_dist_to_target = rail_env.distance_map.get()[
-        train.handle, row, col, train.direction
+        train.handle, row, col, direction
     ]
+
+    delay = rail_env._elapsed_steps - train.latest_arrival + min_dist_to_target
     # assume you are moving with max speed=1
-    return rail_env._elapsed_steps - train.latest_arrival + min_dist_to_target
+    return delay
 
 class _Observer(ABC):
     def __init__(self):
@@ -134,7 +139,7 @@ class StandardObserver(_Observer):
         semaphore = []
         target = []
         delay = []
-        arrived_trains = []
+        # arrived_trains = []
 
         train_at_ports = rail_network._train2next_port
 
@@ -199,7 +204,7 @@ class StandardObserver(_Observer):
                 current_port = port
                 self.logger.debug(f"train at port {port}")
                 delay.append(
-                    self._discretize_delay(train, compute_delay(env.rail_env, train))
+                    self._discretize_delay(train, compute_delay(env.rail_env, train, train.position, train.direction))
                 )
                 target.extend(train.target)
                 train_counter += 1
@@ -228,18 +233,18 @@ class StandardObserver(_Observer):
             )
 
 
-        for train in env.train_done:
-            if train == '__all__':
-                continue
-            if env.train_done[train] == True:
-                if train not in arrived_trains:
-                    arrived_trains.append(train)
+        # for train in env.train_done:
+        #     if train == '__all__':
+        #         continue
+        #     if env.train_done[train] == True:
+        #         if train not in arrived_trains:
+        #             arrived_trains.append(train)
 
         semaphore = np.array(semaphore).astype(int)
         target = np.array(target).astype(int)
         delay = np.array(delay).astype(int)
         observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
-        info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle, "arrived_trains" : arrived_trains}
+        info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle} #, "arrived_trains" : arrived_trains}
         return observation, info
 
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):
