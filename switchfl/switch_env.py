@@ -233,7 +233,7 @@ class _SwitchEnv:
 
         node_id = name2switch_id(agent_selection)
 
-        # if node_id == (13,6):
+        # if node_id == (39,9):
         #     print("Eccolo")
 
         current_switch = self.rail_network.get_switch_on_position(node_id)
@@ -339,11 +339,23 @@ class _SwitchEnv:
             port_blocked = False
             if next_port is not None:
                 if next_port in self.rail_network.semaphores:
-                    if self.rail_network.semaphores[next_port] != train_agent_handle:
+                    if self.rail_network.semaphores[next_port][0] != train_agent_handle \
+                        and self.rail_network.semaphores[next_port][1] == 'out' \
+                            and self.rail_network.semaphores[next_port][2] == self.rail_network.map_direction(next_port):
+                        port_blocked = True
+                    elif self.rail_network.semaphores[next_port][0] != train_agent_handle \
+                        and self.rail_network.semaphores[next_port][1] == 'in' \
+                            and self.rail_network.semaphores[next_port][2] != self.rail_network.map_direction(next_port):
                         port_blocked = True
             if not port_blocked:
                 if out_port in self.rail_network.semaphores:
-                    if self.rail_network.semaphores[out_port] != train_agent_handle:
+                    if self.rail_network.semaphores[out_port][0] != train_agent_handle \
+                        and self.rail_network.semaphores[out_port][1] == 'out' \
+                            and self.rail_network.semaphores[out_port][2] != self.rail_network.map_direction(out_port):
+                        port_blocked = True
+                    elif self.rail_network.semaphores[out_port][0] != train_agent_handle \
+                        and self.rail_network.semaphores[out_port][1] == 'in' \
+                            and self.rail_network.semaphores[out_port][2] == self.rail_network.map_direction(out_port):
                         port_blocked = True
 
             reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
@@ -437,7 +449,6 @@ class _SwitchEnv:
                         todel.append(p)
                 for p in todel:
                     del self.rail_network.semaphores[p]
-
 
                     # if STOP MOVING is due to a semaphore
                     # blocked = False
@@ -535,7 +546,7 @@ class _SwitchEnv:
                     self.active_switch_agents.append(switch_id)
                     self.active_trains.append(train.handle)
                 elif (
-                    train.state == TrainState.STOPPED
+                    (train.state == TrainState.STOPPED or train.state == TrainState.MALFUNCTION)
                     and self.prev_actions[train.handle] == RailEnvActions.STOP_MOVING
                 ):
                     # use new pos because the switch coordinates are its node_id
@@ -544,7 +555,7 @@ class _SwitchEnv:
                     self.active_trains.append(train.handle)
                 # # handle the case in which multiple trains want to enter the same cell
                 elif (
-                    train.state == TrainState.STOPPED
+                    (train.state == TrainState.STOPPED or train.state == TrainState.MALFUNCTION)
                     and self.prev_actions[train.handle] != RailEnvActions.STOP_MOVING
                 ):
                     switch_id = switch_id2name(get_node_id_on_port_id(self.rail_network._train2next_port[train.handle]))

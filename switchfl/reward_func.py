@@ -18,6 +18,7 @@ class StandardRewardFunction(_RewardFunction):
         super().__init__()
         self.rail_env = rail_env
         self.destination_bonus = 200
+        self.stop_penalty = 200
 
     def __call__(self, train, train_actions, train_to_last_node, port_blocked):
         """
@@ -52,6 +53,11 @@ class StandardRewardFunction(_RewardFunction):
             _, last_delay = train_to_last_node[train.handle]
                     
             delay_diff = last_delay - curr_delay
+
+            if train_actions[0] == RailEnvActions.STOP_MOVING:
+                reward = delay_diff - self.stop_penalty
+            else:
+                reward = delay_diff
         
-            return delay_diff, curr_delay
+            return reward, curr_delay
 

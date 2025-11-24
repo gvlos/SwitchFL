@@ -143,7 +143,7 @@ class StandardObserver(_Observer):
 
         train_at_ports = rail_network._train2next_port
 
-        # if node_id == (7,5):
+        # if node_id == (37,20):
         #     print("Eccolo")
 
         # logging_var = {k: t.handle for k, t in train_at_ports.items()}
@@ -182,15 +182,56 @@ class StandardObserver(_Observer):
             #         semaphore.append(1)
             # else:
             #     semaphore.append(1)
+            
+            
+            # first_blocked = False
+            # appended = False
+            # for k in rail_network.semaphores.keys():
+            #     if get_node_id_on_port_id(k) == get_node_id_on_port_id(port):
+            #         if rail_network.semaphores[k][0] != train.handle and rail_network.semaphores[k][1] != rail_network.map_direction(port):
+            #             semaphore.append(0)
+            #             first_blocked = True
+            #             appended = True
+            #             break
+
+            # if not first_blocked:
+            #     for k in rail_network.semaphores.keys():
+            #         if get_node_id_on_port_id(k) == get_node_id_on_port_id(next_port):
+            #             if rail_network.semaphores[k][0] != train.handle and rail_network.semaphores[k][1] != rail_network.map_direction(port):
+            #                 semaphore.append(0)
+            #                 appended = True
+            #                 break
+            #             else:
+            #                 semaphore.append(1)
+            #                 appended = True
+            #                 break
+            
+            # if not appended:
+            #     semaphore.append(1)
+
             first_blocked = False
+
             if port in rail_network.semaphores.keys():
-                if rail_network.semaphores[port] != train.handle:
+                if rail_network.semaphores[port][0] != train.handle \
+                    and rail_network.semaphores[port][1] == 'out' \
+                        and rail_network.semaphores[port][2] != rail_network.map_direction(port):
+                    semaphore.append(0)
+                    first_blocked = True
+                elif rail_network.semaphores[port][0] != train.handle \
+                    and rail_network.semaphores[port][1] == 'in' \
+                        and rail_network.semaphores[port][2] == rail_network.map_direction(port):
                     semaphore.append(0)
                     first_blocked = True
 
             if not first_blocked:
                 if next_port in rail_network.semaphores.keys():
-                    if rail_network.semaphores[next_port] != train.handle:
+                    if rail_network.semaphores[next_port][0] != train.handle \
+                        and rail_network.semaphores[next_port][1] == 'out' \
+                            and rail_network.semaphores[next_port][2] == rail_network.map_direction(next_port):
+                        semaphore.append(0)
+                    elif rail_network.semaphores[next_port][0] != train.handle \
+                        and rail_network.semaphores[next_port][1] == 'in' \
+                            and rail_network.semaphores[next_port][2] != rail_network.map_direction(next_port):
                         semaphore.append(0)
                     else:
                         semaphore.append(1)

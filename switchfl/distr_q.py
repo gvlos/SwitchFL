@@ -94,16 +94,20 @@ class DistrQLearning:
         for agent in self.env.agent_iter():
 
             observation, reward, termination, truncation, info = self.env.last()
-            
+            # print("--------------------------------------")
+            # print(f"Observation: {observation}")
+            # print(f"Reward: {reward}")
+
             if termination or truncation:
                 break
             
             action = self.max_action(observation, agent, info["action_mask"])
 
+            # print(f"Action:{action}")
             self.env.step(action)
 
             if plot:
-                a = self.env.rail_env.render()
+                a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
                 fig, ax = plt.subplots(figsize=(8,8))
                 plt.imshow(a)
                 ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.width), minor=False)
@@ -152,6 +156,9 @@ class DistrQLearning:
             for agent in self.env.agent_iter():
 
                 observation, reward, termination, truncation, info = self.env.last()
+                # print("--------------------------------------")
+                # print(f"Observation: {observation}")
+                # print(f"Reward: {reward}")
                 
                 if termination or truncation:
                     break
@@ -160,6 +167,7 @@ class DistrQLearning:
                 if rng.random() < self.epsilon[agent]:
                     self.env.action_space(agent).seed(int(rng.integers(0, np.iinfo(np.int32).max)))
                     action = self.env.action_space(agent).sample(info["action_mask"])
+                    # print(f"Sampled action: {action}")
                 else:
                     action = self.max_action(observation, agent, info["action_mask"])
 
@@ -172,7 +180,6 @@ class DistrQLearning:
                     previous_obs = update_dict[(agent_id, active_train)][0]
                     previous_act = update_dict[(agent_id, active_train)][1]
                     previous_agent = update_dict[(agent_id, active_train)][2]
-                    # print("---------------------------------------------------")
                     # print(f"Updating Q-values: agent={previous_agent}, obs={previous_obs}, act={previous_act} with reward={reward}, next state={observation}, next_agent={agent}")
                     self.update(state=previous_obs, action=previous_act,
                                 reward=reward, next_state=observation,
@@ -182,6 +189,7 @@ class DistrQLearning:
                     del update_dict[agent_id, active_train]
 
                 next_q_agent = post_step_info["next_switch"]
+                # print(f"Next agent: {next_q_agent}")
                 update_dict[(next_q_agent, active_train)] = (observation, action, agent)
                 
                 cum_reward[t] += reward
@@ -311,6 +319,8 @@ class DistrQLearning:
         """
         self.__check_entry(state, agent)
         max_q = np.argmax(self.q_table[tuple(state)])
+        #print(f"Action mask={action_mask}")
+        # print(f"Q-entry: {self.q_table[tuple(state)]}")
         if action_mask[max_q]:
             return max_q
         else:
