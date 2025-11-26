@@ -17,8 +17,8 @@ class StandardRewardFunction(_RewardFunction):
     def __init__(self, rail_env):
         super().__init__()
         self.rail_env = rail_env
-        self.destination_bonus = 200
-        self.stop_penalty = 200
+        self.destination_bonus = 500
+        self.stop_penalty = 300
 
     def __call__(self, train, train_actions, train_to_last_node, port_blocked):
         """

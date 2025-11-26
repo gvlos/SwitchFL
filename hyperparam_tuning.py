@@ -7,7 +7,7 @@ if __name__=='__main__':
     
     random_seed = 13
     out_dir = "/home/gianvito/Desktop/debug_q_learning_env2"
-    checkpoint_freq = 10000
+    checkpoint_freq = 5_000
 
     width = 40
     height = 40
@@ -30,16 +30,16 @@ if __name__=='__main__':
     # max_duration = 0
 
     hyperparams = {
-        "epsilon" : [0.7],
-        "epsilon_decay_rate" : [0.9999],
+        "epsilon" : [1.0],
+        "epsilon_decay_rate" : [0.9998],
         "lr" : [0.1],
-        "lr_decay_rate" : [0.9999],
+        "lr_decay_rate" : [1.0],
     }
 
     gamma = 1.
     default_q = 0.
 
-    num_episodes = 10
+    num_episodes = 50_000
 
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 
                         for values in product(*hyperparams.values())))

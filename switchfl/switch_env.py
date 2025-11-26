@@ -15,7 +15,7 @@ from flatland.envs.step_utils.states import TrainState
 from flatland.utils.rendertools import AgentRenderVariant
 from pettingzoo import AECEnv
 from switchfl import NodeId, TrainAgentHandle
-from switchfl.observer import StandardObserver, _Observer, compute_delay
+from switchfl.observer import StandardObserver, _Observer, compute_delay, check_port_blocked
 from switchfl.rail_network import RailNetwork
 from switchfl.utils.logging import format_logger, set_seed
 from switchfl.utils.naming import name2switch_id, switch_id2name, symmetric_string, get_node_id_on_port_id
@@ -181,38 +181,6 @@ class _SwitchEnv:
         obs = self.obs2human(agent, observation)
         obs = {k: v.tolist() for k, v in obs.items()}
         return obs
-    
-    # def _check_valid_action(self, train_actions):
-        
-    #     if train_actions[self.active_train][0] == RailEnvActions.STOP_MOVING:
-    #         return True
-        
-    #     next_action = self.train_action_plan[self.active_train][0] \
-    #         if len(self.train_action_plan[self.active_train]) > 0 else train_actions[self.active_train][0]
-        
-    #     position = self.rail_env.agents[self.active_train].position
-    #     direction = self.rail_env.agents[self.active_train].direction
-
-    #     (
-    #         new_cell_valid,
-    #         (new_position,
-    #         new_direction),
-    #         transition_valid,
-    #         preprocessed_action,
-    #     ) = self.rail_env.rail.check_action_on_agent(
-    #         next_action,
-    #         ((position),
-    #         direction)
-    #     )
-
-    #     valid_action = True
-    #     for agent in self.rail_env.agents:
-    #         if agent.handle != self.active_train:
-    #             if agent.position == new_position:
-    #                 valid_action = False
-
-    #     return valid_action
-
 
     def _apply_action(self, agent_selection: str, action: int) -> NodeId:
         """get train actions and update semaphores at the corresponding switches for a SINGLE train transitioning a switch
@@ -233,9 +201,6 @@ class _SwitchEnv:
 
         node_id = name2switch_id(agent_selection)
 
-        # if node_id == (39,9):
-        #     print("Eccolo")
-
         current_switch = self.rail_network.get_switch_on_position(node_id)
 
         # update train_action_plan such that move_trains step can work it down
@@ -243,42 +208,16 @@ class _SwitchEnv:
             node_id, action, self.active_train
         )
 
-        # valid_action = self._check_valid_action(train_actions)
-
         # if the action is stop moving take the next port corresponding to next action
         if list(train_actions.values())[0] == [RailEnvActions.STOP_MOVING]:
-            # if len(self.train_action_plan[self.active_train]) == 0:
-            #     check_idx = 0
-            #     next_action = RailEnvActions.MOVE_FORWARD
-            # else:
-            #     check_idx = 1
-            #     next_action = self.train_action_plan[self.active_train][0]
-            # in_port = self.rail_network._train2next_port[self.active_train]
-            # for idx, a in enumerate(current_switch.actions):
-            #     for p, v in a.items():
-            #         if p == in_port and v[check_idx] == next_action:
-            #                 out_port = current_switch.action_outcomes[idx][1]
+            # in and out port of the traversing switch
             in_port = self.rail_network._train2next_port[self.active_train]
             out_port = in_port
         else:
-            # in and out port of the traversing switch
             in_port, out_port = current_switch.action_outcomes[action]
-
 
         # # transition a train if there is actually a train moving
         if moving_train is not None:
-            # update rail_network how trains are transitioned from edge to edge
-            # if valid_action:
-            #     train_prev_port = self.rail_network._train_prev_port[moving_train]
-            #     moving_train = self.rail_env.agents[moving_train]
-
-            #     next_switch, next_port = self.rail_network.transition_train(
-            #         moving_train, in_port, out_port
-            #     )
-            # else:
-            #     moving_train = None
-            #     next_switch = current_switch
-            #     next_port = None
             moving_train = self.rail_env.agents[moving_train]
 
             next_switch, next_port = self.rail_network.transition_train(
@@ -287,9 +226,6 @@ class _SwitchEnv:
         else:
             next_switch = current_switch
             next_port = None
-        # next_switch, next_port = self.rail_network.transition_train(
-        #     self.rail_env.agents[self.active_train], in_port, out_port
-        # )
         
         self.logger.debug(f"existing plan: {self.train_action_plan}")
         self.logger.debug(f"new actions: {train_actions}")
@@ -304,7 +240,6 @@ class _SwitchEnv:
             
             if (
                 moving_train is not None
-                # and self.rail_network.get_port_distance(out_port, next_port) == 0
                 and len(self.train_action_plan[train_agent_handle]) > 0
             ):
                 # cut away the MOVE_FORWARD action of the new plan, because
@@ -313,50 +248,14 @@ class _SwitchEnv:
                 if len(self.train_action_plan[train_agent_handle]) > 1:
                     self.train_action_plan[train_agent_handle] = self.train_action_plan[train_agent_handle][:1] 
                 self.train_action_plan[train_agent_handle].extend(next_train_actions)
-
-            # elif (
-            #     moving_train is not None
-            #     and len(self.train_action_plan[train_agent_handle]) > 0
-            #     and self.rail_network.get_port_distance(train_prev_port, in_port) == 0
-            # ):
-            #     next_train_actions.pop(0)
-            #     self.train_action_plan[train_agent_handle].extend(next_train_actions)
-            # moving train is None -> stop moving command (stop the train before it enters the next switch)
-            # but retain information about how the train will enter the next switch
-            # example: move left leads directly on another switch
             elif (
                 moving_train is None
-                # and len(self.train_action_plan[train_agent_handle]) > 0
             ):
-                # stop_action = next_train_actions[0]
-                # assert stop_action == RailEnvActions.STOP_MOVING
                 self.train_action_plan[train_agent_handle].insert(0, RailEnvActions.STOP_MOVING)
-                # self.train_action_plan[train_agent_handle].insert(1, RailEnvActions.MOVE_FORWARD)
             else:
                 self.train_action_plan[train_agent_handle].extend(next_train_actions)
 
-
-            port_blocked = False
-            if next_port is not None:
-                if next_port in self.rail_network.semaphores:
-                    if self.rail_network.semaphores[next_port][0] != train_agent_handle \
-                        and self.rail_network.semaphores[next_port][1] == 'out' \
-                            and self.rail_network.semaphores[next_port][2] == self.rail_network.map_direction(next_port):
-                        port_blocked = True
-                    elif self.rail_network.semaphores[next_port][0] != train_agent_handle \
-                        and self.rail_network.semaphores[next_port][1] == 'in' \
-                            and self.rail_network.semaphores[next_port][2] != self.rail_network.map_direction(next_port):
-                        port_blocked = True
-            if not port_blocked:
-                if out_port in self.rail_network.semaphores:
-                    if self.rail_network.semaphores[out_port][0] != train_agent_handle \
-                        and self.rail_network.semaphores[out_port][1] == 'out' \
-                            and self.rail_network.semaphores[out_port][2] != self.rail_network.map_direction(out_port):
-                        port_blocked = True
-                    elif self.rail_network.semaphores[out_port][0] != train_agent_handle \
-                        and self.rail_network.semaphores[out_port][1] == 'in' \
-                            and self.rail_network.semaphores[out_port][2] == self.rail_network.map_direction(out_port):
-                        port_blocked = True
+            port_blocked = check_port_blocked(next_port, out_port, train_agent_handle, self.rail_network)
 
             reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
                                                   self.train_action_plan[train_agent_handle],
@@ -444,28 +343,11 @@ class _SwitchEnv:
             # Reset semaphores of trains that have arrived
             if self.train_done[train.handle]:
                 todel=[]
-                for p, tr in self.rail_network.semaphores.items():
+                for p, (tr, _, _) in self.rail_network.semaphores.items():
                     if tr == train.handle:
                         todel.append(p)
                 for p in todel:
                     del self.rail_network.semaphores[p]
-
-                    # if STOP MOVING is due to a semaphore
-                    # blocked = False
-                    
-                    # port = self.rail_network._train2next_port[train.handle]
-                    # node = get_node_id_on_port_id(port)
-                    # next_switch, next_port = self.rail_network.get_neighbor_switch(port)
-                    # next_node = get_node_id_on_port_id(next_port)
-                    
-                    # self.rail_network.semaphores
-
-
-                    # for occupied_port, tr in self.rail_network.semaphores.items():
-                    #     if np.array_equiv(np.array(occupied_port).astype(int), occupied_port) and tr != train.handle:
-                    #         blocked = True
-                    # if not blocked:
-                    #     self.train_action_plan[train.handle].pop(0)
 
         self.rail_env_time += 1
         self._check_action_execution()
@@ -549,11 +431,10 @@ class _SwitchEnv:
                     (train.state == TrainState.STOPPED or train.state == TrainState.MALFUNCTION)
                     and self.prev_actions[train.handle] == RailEnvActions.STOP_MOVING
                 ):
-                    # use new pos because the switch coordinates are its node_id
                     switch_id = switch_id2name(new_position)
                     self.active_switch_agents.append(switch_id)
                     self.active_trains.append(train.handle)
-                # # handle the case in which multiple trains want to enter the same cell
+                # handle the case in which multiple trains want to enter the same cell
                 elif (
                     (train.state == TrainState.STOPPED or train.state == TrainState.MALFUNCTION)
                     and self.prev_actions[train.handle] != RailEnvActions.STOP_MOVING

@@ -125,30 +125,6 @@ class _Switch(ABC):
         mask_0.append(1)
         mask_1.append(1)
         
-
-        # mask_1 = []      
-        # for source, _ in self.action_outcomes:
-        #     blocked = False
-        #     for p, n in self.port2neighbor.items():
-        #         if p == source:
-        #             _, successor_port = rail_network.get_neighbor_switch(p)
-        #             if successor_port in semaphores.keys():
-        #                 if semaphores[successor_port] != train:
-        #                     blocked = True
-        #                 else:
-        #                     blocked = False
-        #     if blocked:
-        #         mask_1.append(0)
-        #     else:
-        #         mask_1.append(1) 
-
-
-        # mask = np.array(mask_0).astype(np.int8)
-
-        # mask = [self.semaphores[target] for _ , target in self.action_outcomes]
-        # mask = (~np.array(mask)).astype(np.int8)
-        # mask = (~np.array(mask) & np.array(mask_0)).astype(np.int8)
-        
         mask = (np.array(mask_0) & np.array(mask_1)).astype(np.int8)
 
         return mask
@@ -168,10 +144,6 @@ class _Switch(ABC):
                     If all currently positioned trains have to wait -> return None.
                 - For each train at the switch return actions to perform
         """
-        # if self.semaphores[target_port]:
-        #     raise RuntimeError(
-        #         f"Semaphore is blocked for action: {self.action_outcomes[action]}"
-        #     )
 
         result = {}
         moving_train = None
@@ -188,20 +160,12 @@ class _Switch(ABC):
             
                 if actions[0] != RailEnvActions.STOP_MOVING:
                     moving_train = active_train
-                    # if train_agents[handle].state == TrainState.MOVING:
-                    #     moving_train = train_agents[handle]
 
         if len(result) == 0:
             print(
                 f"No train is at switch {self.id} for action {action}"
             )
 
-        # If only one train and it is STOP_MOVING, make sure the STOP_MOVING is taken only once
-        # if (
-        #     len(result) == 1
-        #     and next(iter(result.values()))[0] == RailEnvActions.STOP_MOVING
-        # ):
-        #     result[next(iter(result))] = [RailEnvActions.STOP_MOVING]
         return moving_train, result
 
     def get_port_nodes(self) -> List[PortId]:

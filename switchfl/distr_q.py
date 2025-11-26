@@ -104,7 +104,7 @@ class DistrQLearning:
             action = self.max_action(observation, agent, info["action_mask"])
 
             # print(f"Action:{action}")
-            self.env.step(action)
+            post_step_info = self.env.step(action)
 
             if plot:
                 a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
@@ -123,7 +123,9 @@ class DistrQLearning:
             cum_reward += reward
 
         self.env.close()
+        arrived_trains = len(post_step_info["arrived_trains"])
         print(f"Terminated in {num_iter} steps ({self.env.rail_env._elapsed_steps} flatland steps), cumulative reward = {cum_reward}")
+        print(f"Arrived trains: {arrived_trains} / {self.env.rail_env.get_num_agents()}")
 
     def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int):
         """

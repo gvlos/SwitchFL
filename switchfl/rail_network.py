@@ -123,7 +123,6 @@ class RailNetwork:
         This dictionary changes after a train transition got determined by an agent."""
 
         self.semaphores: Dict[PortId, tuple] = {}
-        self.occupied_edges: Dict[tuple, int] = {}
 
     def reset(self):
         # reset all switches
@@ -136,7 +135,6 @@ class RailNetwork:
         }
 
         self.semaphores = {}
-        self.occupied_edges = {}
 
     def get_switch_on_position(self, switch: NodeId) -> _Switch | None:
         """get switch class for the corresponding position of the switch.
@@ -216,28 +214,6 @@ class RailNetwork:
         else:
             return None
 
-    def free_semaphore(self, port: PortId):
-        """Indicate that there is not train anymore incoming from the given port
-
-        Args:
-            port (PortId): which port is free again?
-        """
-        switch = self.get_switch_on_port(port)
-        switch.free_port(port)
-        node_id = get_node_id_on_port_id(port)
-        self.switch_network.update(nodes={node_id: {"switch_cls": switch}})
-
-    def block_semaphore(self, port: PortId):
-        """Indicate that there is a train incoming from the given port
-
-        Args:
-            port (PortId): which port is going to be blocked.
-        """
-        switch = self.get_switch_on_port(port)
-        switch.block_port(port)
-        node_id = get_node_id_on_port_id(port)
-        self.switch_network.update(nodes={node_id: {"switch_cls": switch}})
-
     def transition_train(
         self, train: TrainAgent, in_port: PortId, out_port: PortId
     ) -> Tuple[_Switch, PortId]:
@@ -290,19 +266,8 @@ class RailNetwork:
             source (PortId): the port a train entered a switch
             target (PortId): the port through a train will enter next
         """
-        # self.free_semaphore(source)
-        # self.block_semaphore(target)
 
-        # if next_switch.id == (20,6):
-        #     self.logger.debug("Eccolo")
-
-        # if source in self.semaphores:
-        #     del self.semaphores[source]
-        #     switch = self.get_switch_on_port(source)
-        #     for port in switch.get_port_nodes():
-        #         if port in self.semaphores:
-        #             del self.semaphores[port]
-
+        # free previous semaphores occupied by the train
         for p in self.get_switch_on_port(self._train2next_port[train.handle]).get_port_nodes():
             if p in self.semaphores and self.semaphores[p][0] == train.handle:
                 del self.semaphores[p]
@@ -315,16 +280,6 @@ class RailNetwork:
         self.semaphores[out_port] = (train.handle, 'out', self.map_direction(out_port))
         self.semaphores[target] = (train.handle, 'in', self.map_direction(target))
 
-        # delete previously occupied edges
-        if len(self.occupied_edges) > 0:
-            edge_list = []
-            for edge in self.rail_graph.edges:
-                if edge[0] == source or edge[1] == source:
-                    edge_list.append(edge)
-            for edge in edge_list:
-                if edge in self.occupied_edges:
-                    del self.occupied_edges[edge]
-
         # find all edges related to target
         edge_list = []
         for edge in self.rail_graph.edges:
@@ -336,10 +291,6 @@ class RailNetwork:
             if edge[0] == out_port or edge[1] == out_port:
                 moving_edge = edge
         edge_list.remove(moving_edge)
-
-        new_edges = {}
-
-        new_edges[moving_edge] = train.handle
 
         # if there is only one port at the end of the edge, find the next edge and add it to the occupied edges
         if len(edge_list) == 1:
@@ -354,8 +305,6 @@ class RailNetwork:
                     edges_toremove.append(edge)
             for edge in edges_toremove:
                 prox_list.remove(edge)
-            new_edges[edge_list[0]] = train.handle
-            new_edges[prox_list[0]] = train.handle
 
             out_edge = edge_list[0]
             for port in out_edge:
@@ -369,35 +318,10 @@ class RailNetwork:
                     if port not in self.semaphores.keys():
                         self.semaphores[port] = (train.handle, 'in', self.map_direction(port))
 
-
-        # count = 0
-        # for p, np in next_switch.action_outcomes:
-        #     if p == target:
-        #         count += 1
-        #         next_port = np
-        # if count == 1:
-        #     _, successor_port = self.get_neighbor_switch(next_port)
-        #     self.semaphores[successor_port] = train.handle
-        # elif next_port in self.semaphores:
-        #     del self.semaphores[next_port]
-
-        # for edge in new_edges:
-        #     for port in edge:
-        #         if port not in self.semaphores.keys() and port != source and port != out_port:
-        #             self.semaphores[port] = (train.handle, 'out', self.map_direction(port))
-
         for port in moving_edge:
             if port != source and port != out_port:
                 if port not in self.semaphores.keys():
                     self.semaphores[port] = (train.handle, 'out', self.map_direction(port))
-                else:
-                    if self.semaphores[port][0] != train.handle:
-                        self.semaphores[port] = (train.handle, 'out', self.map_direction(port))
-
-
-
-
-        self.occupied_edges.update(new_edges)
 
         self.logger.debug(f"CURRENT SEMAPHORES: {self.semaphores}")
 
