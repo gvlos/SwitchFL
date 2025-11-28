@@ -94,9 +94,9 @@ class DistrQLearning:
         for agent in self.env.agent_iter():
 
             observation, reward, termination, truncation, info = self.env.last()
-            # print("--------------------------------------")
-            # print(f"Observation: {observation}")
-            # print(f"Reward: {reward}")
+            print("--------------------------------------")
+            print(f"Observation: {observation}")
+            print(f"Reward: {reward}")
 
             if termination or truncation:
                 break
@@ -158,9 +158,9 @@ class DistrQLearning:
             for agent in self.env.agent_iter():
 
                 observation, reward, termination, truncation, info = self.env.last()
-                # print("--------------------------------------")
-                # print(f"Observation: {observation}")
-                # print(f"Reward: {reward}")
+                print("--------------------------------------")
+                print(f"Observation: {observation}")
+                print(f"Reward: {reward}")
                 
                 if termination or truncation:
                     break
@@ -169,9 +169,10 @@ class DistrQLearning:
                 if rng.random() < self.epsilon[agent]:
                     self.env.action_space(agent).seed(int(rng.integers(0, np.iinfo(np.int32).max)))
                     action = self.env.action_space(agent).sample(info["action_mask"])
-                    # print(f"Sampled action: {action}")
+                    print(f"Sampled action: {action}")
                 else:
                     action = self.max_action(observation, agent, info["action_mask"])
+                    print(f"Max action: {action}")
 
                 post_step_info = self.env.step(action)
                 active_train = info["active_train"]
@@ -182,7 +183,7 @@ class DistrQLearning:
                     previous_obs = update_dict[(agent_id, active_train)][0]
                     previous_act = update_dict[(agent_id, active_train)][1]
                     previous_agent = update_dict[(agent_id, active_train)][2]
-                    # print(f"Updating Q-values: agent={previous_agent}, obs={previous_obs}, act={previous_act} with reward={reward}, next state={observation}, next_agent={agent}")
+                    print(f"Updating Q-values: agent={previous_agent}, obs={previous_obs}, act={previous_act} with reward={reward}, next state={observation}, next_agent={agent}")
                     self.update(state=previous_obs, action=previous_act,
                                 reward=reward, next_state=observation,
                                 previous_agent=previous_agent,
@@ -198,30 +199,17 @@ class DistrQLearning:
                 num_iter += 1
                 agent_num_interactions[agent] += 1
 
-                # a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
-                # fig, ax = plt.subplots(figsize=(8,8))
-                # plt.imshow(a)
-                # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-                # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-                # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
-                # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
-                # ax.set_xticklabels(np.arange(18))
-                # ax.set_yticklabels(np.arange(18))
-                # plt.savefig(f"/home/gianvito/Desktop/snap_env2/episode_{t}_iter_{num_iter}.png", dpi=300)
-                # plt.close()
-
-                # if t==10:
-                #     a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
-                #     fig, ax = plt.subplots(figsize=(8,8))
-                #     plt.imshow(a)
-                #     ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/40), minor=False)
-                #     ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/40), minor=False)
-                #     ax.xaxis.grid(True, which='major', color='black', linestyle='--')
-                #     ax.yaxis.grid(True, which='major', color='black', linestyle='--')
-                #     ax.set_xticklabels(np.arange(40))
-                #     ax.set_yticklabels(np.arange(40))
-                #     plt.savefig(f"/home/gianvito/Desktop/snap_env2/episode_{t}_iter_{num_iter}.png", dpi=300)
-                #     plt.close()
+                a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
+                fig, ax = plt.subplots(figsize=(8,8))
+                plt.imshow(a)
+                ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.width), minor=False)
+                ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.height), minor=False)
+                ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+                ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+                ax.set_xticklabels(np.arange(self.env.rail_env.width))
+                ax.set_yticklabels(np.arange(self.env.rail_env.height))
+                plt.savefig(os.path.join(out_dir, f"learn_iter_{num_iter}.png"), dpi=300)
+                plt.close()
 
             arrived_trains[t] = len(post_step_info["arrived_trains"])
 
@@ -281,12 +269,12 @@ class DistrQLearning:
 
         self.__decay_lr(previous_agent, agent_num_interactions[previous_agent])
 
-        # print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
+        print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
         self.q_table[tuple(state)][action] = \
             (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
             self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
-        # print(f"New Q-entry: {self.q_table[tuple(state)]}")
-        # print("")
+        print(f"New Q-entry: {self.q_table[tuple(state)]}")
+        print("")
 
     def max_q(self, state, agent):
         """
@@ -321,8 +309,8 @@ class DistrQLearning:
         """
         self.__check_entry(state, agent)
         max_q = np.argmax(self.q_table[tuple(state)])
-        #print(f"Action mask={action_mask}")
-        # print(f"Q-entry: {self.q_table[tuple(state)]}")
+        print(f"Action mask={action_mask}")
+        print(f"Q-entry: {self.q_table[tuple(state)]}")
         if action_mask[max_q]:
             return max_q
         else:

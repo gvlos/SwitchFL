@@ -509,7 +509,7 @@ class _SwitchEnv:
             # if the first switch is directly behind a turn in the rail
             port = self.rail_network.get_port_on_position(last_pos, last_dir)
             self.logger.debug(f"port: {port}")
-            self.rail_network.block_semaphore(port)
+            self.rail_network.semaphores[port] = (train.handle, 'out', last_dir)
             self.rail_network.set_trains_next_port(train, port)
 
     @property

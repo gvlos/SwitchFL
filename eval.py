@@ -58,4 +58,4 @@ if __name__=='__main__':
                         seed = int(config["MISC"]["random_seed"]))
     
     model.load(model_path)
-    model.test(out_dir=out_dir, plot=False)
+    model.test(out_dir=out_dir, plot=True)

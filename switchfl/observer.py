@@ -167,8 +167,6 @@ class StandardObserver(_Observer):
 
         train_at_ports = rail_network._train2next_port
 
-        # if node_id == (37,20):
-        #     print("Eccolo")
 
         # logging_var = {k: t.handle for k, t in train_at_ports.items()}
         # self.logger.debug(f"train at ports {logging_var}")
@@ -182,87 +180,10 @@ class StandardObserver(_Observer):
         
         for port in switch.get_port_nodes():  # Get port IDs of this node
             self.logger.debug(f"port {port} coming from cell {switch.switch_graph.nodes.data('rail_prev_node')[port]}")
-            # semaphore.append(switch.semaphores[port])
-
-            # for source, target_port in switch.action_outcomes:
-            #     if source == port:
-            #         _, next_port = rail_network.get_neighbor_switch(target_port)
-            #         if next_port in rail_network.semaphores:
-            #             if rail_network.semaphores[next_port] != train.handle:
-            #                 semaphore.append(0)
-            #                 self.logger.debug(f"Semaphore ON -> next port {next_port} is blocked")
-            #             else:
-            #                 semaphore.append(1)
-            #         else:
-            #             semaphore.append(1)
 
             _, next_port = rail_network.get_neighbor_switch(port)
 
-            # next_node = get_node_id_on_port_id(next_port)
-            # if next_node in node_semaphore_dict.keys():
-            #     if rail_network.semaphores[node_semaphore_dict[next_node]] != train.handle:
-            #         semaphore.append(0)
-            #     else:
-            #         semaphore.append(1)
-            # else:
-            #     semaphore.append(1)
-            
-            
-            # first_blocked = False
-            # appended = False
-            # for k in rail_network.semaphores.keys():
-            #     if get_node_id_on_port_id(k) == get_node_id_on_port_id(port):
-            #         if rail_network.semaphores[k][0] != train.handle and rail_network.semaphores[k][1] != rail_network.map_direction(port):
-            #             semaphore.append(0)
-            #             first_blocked = True
-            #             appended = True
-            #             break
-
-            # if not first_blocked:
-            #     for k in rail_network.semaphores.keys():
-            #         if get_node_id_on_port_id(k) == get_node_id_on_port_id(next_port):
-            #             if rail_network.semaphores[k][0] != train.handle and rail_network.semaphores[k][1] != rail_network.map_direction(port):
-            #                 semaphore.append(0)
-            #                 appended = True
-            #                 break
-            #             else:
-            #                 semaphore.append(1)
-            #                 appended = True
-            #                 break
-            
-            # if not appended:
-            #     semaphore.append(1)
-
-            # first_blocked = False
-
-            # if port in rail_network.semaphores.keys():
-            #     if rail_network.semaphores[port][0] != train.handle \
-            #         and rail_network.semaphores[port][1] == 'out' \
-            #             and rail_network.semaphores[port][2] != rail_network.map_direction(port):
-            #         semaphore.append(0)
-            #         first_blocked = True
-            #     elif rail_network.semaphores[port][0] != train.handle \
-            #         and rail_network.semaphores[port][1] == 'in' \
-            #             and rail_network.semaphores[port][2] == rail_network.map_direction(port):
-            #         semaphore.append(0)
-            #         first_blocked = True
-
-            # if not first_blocked:
-            #     if next_port in rail_network.semaphores.keys():
-            #         if rail_network.semaphores[next_port][0] != train.handle \
-            #             and rail_network.semaphores[next_port][1] == 'out' \
-            #                 and rail_network.semaphores[next_port][2] == rail_network.map_direction(next_port):
-            #             semaphore.append(0)
-            #         elif rail_network.semaphores[next_port][0] != train.handle \
-            #             and rail_network.semaphores[next_port][1] == 'in' \
-            #                 and rail_network.semaphores[next_port][2] != rail_network.map_direction(next_port):
-            #             semaphore.append(0)
-            #         else:
-            #             semaphore.append(1)
-            #     else:
-            #         semaphore.append(1)
-
-            port_blocked = self.check_port_blocked(next_port, port, train.handle, rail_network)
+            port_blocked = check_port_blocked(next_port, port, train.handle, rail_network)
             if port_blocked:
                 semaphore.append(0)
             else:
@@ -286,35 +207,16 @@ class StandardObserver(_Observer):
             train_counter == 0
         ):  
 
-            # a = rail_env.render()
-            # fig, ax = plt.subplots(figsize=(8,8))
-            # plt.imshow(a)
-            # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-            # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/18), minor=False)
-            # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
-            # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
-            # ax.set_xticklabels(np.arange(18))
-            # ax.set_yticklabels(np.arange(18))
-            # plt.show(block=False)
-
 
             self.logger.fatal       (
                 "Bug detected. No train detected at active switch. Check information in RailNetwork."
             )
 
-
-        # for train in env.train_done:
-        #     if train == '__all__':
-        #         continue
-        #     if env.train_done[train] == True:
-        #         if train not in arrived_trains:
-        #             arrived_trains.append(train)
-
         semaphore = np.array(semaphore).astype(int)
         target = np.array(target).astype(int)
         delay = np.array(delay).astype(int)
         observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
-        info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle} #, "arrived_trains" : arrived_trains}
+        info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle}
         return observation, info
     
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):
