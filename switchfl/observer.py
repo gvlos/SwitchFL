@@ -50,16 +50,29 @@ def check_port_blocked(next_port, out_port, train_agent_handle, rail_network: Ra
                 and rail_network.semaphores[next_port][1] == 'in' \
                     and rail_network.semaphores[next_port][2] != rail_network.map_direction(next_port):
                 port_blocked = True
-    if not port_blocked:
+    
+        if not port_blocked:
+            if out_port in rail_network.semaphores:
+                if rail_network.semaphores[out_port][0] != train_agent_handle \
+                    and rail_network.semaphores[out_port][1] == 'out' \
+                        and rail_network.semaphores[out_port][2] != rail_network.map_direction(out_port):
+                    port_blocked = True
+                elif rail_network.semaphores[out_port][0] != train_agent_handle \
+                    and rail_network.semaphores[out_port][1] == 'in' \
+                        and rail_network.semaphores[out_port][2] == rail_network.map_direction(out_port):
+                    port_blocked = True
+    # handle the case in which the stop moving action makes the out_port == in_port
+    else:
         if out_port in rail_network.semaphores:
             if rail_network.semaphores[out_port][0] != train_agent_handle \
                 and rail_network.semaphores[out_port][1] == 'out' \
-                    and rail_network.semaphores[out_port][2] != rail_network.map_direction(out_port):
+                    and rail_network.semaphores[out_port][2] == rail_network.map_direction(out_port):
                 port_blocked = True
             elif rail_network.semaphores[out_port][0] != train_agent_handle \
                 and rail_network.semaphores[out_port][1] == 'in' \
-                    and rail_network.semaphores[out_port][2] == rail_network.map_direction(out_port):
+                    and rail_network.semaphores[out_port][2] != rail_network.map_direction(out_port):
                 port_blocked = True
+
     return port_blocked
 
 class _Observer(ABC):

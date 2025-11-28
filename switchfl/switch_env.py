@@ -599,7 +599,7 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
             self.truncated = True
 
         arrived_trains = [train.handle for train in self.rail_env.agents \
-                          if train.position == None]
+                          if train.position == None and train.arrival_time != None]
 
         # prepare info dict
         post_step_info = {"next_switch": next_switch, "arrived_trains" : arrived_trains}

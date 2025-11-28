@@ -6,7 +6,8 @@ from itertools import product
 if __name__=='__main__':
     
     random_seed = 13
-    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2"
+    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2_bis"
+    venv_dir = "/home/gianvito/Documents/SwitchFL-1/venv_sfl"
     checkpoint_freq = 5_000
 
     width = 40
@@ -39,7 +40,7 @@ if __name__=='__main__':
     gamma = 1.
     default_q = 0.
 
-    num_episodes = 50_000
+    num_episodes = 1_000
 
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 
                         for values in product(*hyperparams.values())))
@@ -83,17 +84,13 @@ if __name__=='__main__':
         with open(config_path, 'w') as configfile:
             config.write(configfile)
 
-
-    # with concurrent.futures.ProcessPoolExecutor() as executor:
-    #     for config_path, elapsed_time in zip(config_list, executor.map(launch_experiment, config_list)):
-    #         print(f"Exp {config_path.split('/')[-2]} done in {round(elapsed_time,2)} seconds")
-
+        # cmd = f"source {venv_dir}/bin/activate && which python3 &> out.out && python3 main.py -c {config_path} 1>{os.path.join(exp_dir, "stdout.out")} 2>{os.path.join(exp_dir, "stderr.err")} &"        
         cmd = f"python main.py -c {config_path} 1>{os.path.join(exp_dir, "stdout.out")} 2>{os.path.join(exp_dir, "stderr.err")} &"
-        
+
         try:
             print()
             print('------------------------------------------------')
             print(f"Starting experiment {idx+1}/{len(model_param_list)}")
-            end = subprocess.run(cmd, shell=True)
+            subprocess.Popen(cmd, shell=True, executable='/bin/bash')
         except subprocess.CalledProcessError as e:
             print(str(e)) 

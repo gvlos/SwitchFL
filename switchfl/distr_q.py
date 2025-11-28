@@ -154,6 +154,7 @@ class DistrQLearning:
 
             update_dict = {}
             num_iter = 0
+            trains_at_destination = []
 
             for agent in self.env.agent_iter():
 
@@ -192,8 +193,23 @@ class DistrQLearning:
                     del update_dict[agent_id, active_train]
 
                 next_q_agent = post_step_info["next_switch"]
-                # print(f"Next agent: {next_q_agent}")
+
                 update_dict[(next_q_agent, active_train)] = (observation, action, agent)
+                
+                # destination bonus handling
+                for train in post_step_info["arrived_trains"]:
+                    if train not in trains_at_destination:
+                        trains_at_destination.append(train)
+
+                        for (upd_agent, upd_train), (upd_obs, upd_act, upd_previous_agent) in list(update_dict.items()):
+                            if upd_train == train:
+                                print(f"Updating Q-values for ARRIVED TRAIN: agent={upd_previous_agent}, obs={upd_obs}, act={upd_act} with reward={500}, next state=None, next_agent=None")
+                                self.update(state=upd_obs, action=upd_act,
+                                            reward=500, next_state=None,
+                                            previous_agent=upd_previous_agent,
+                                            next_agent=None,
+                                            agent_num_interactions=agent_num_interactions)
+                                del update_dict[upd_agent, upd_train]
                 
                 cum_reward[t] += reward
                 num_iter += 1
@@ -290,6 +306,8 @@ class DistrQLearning:
         float
             The maximum Q-value of the state
         """
+        if state is None:  # final state
+            return 0.
         self.__check_entry(state, agent)
         return max(self.q_table[tuple(state)]) if state is not None else 0.
     

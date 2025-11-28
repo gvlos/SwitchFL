@@ -24,8 +24,6 @@ class StandardRewardFunction(_RewardFunction):
         """
         Updates the rewards based on the current state of the environment
         """
-        # Compute rewards for trains that have arrived
-
         new_position = train.position
         new_direction = train.direction
 
@@ -44,8 +42,6 @@ class StandardRewardFunction(_RewardFunction):
                 )
 
         curr_delay = compute_delay(self.rail_env, train, new_position, new_direction)
-        if new_position == train.target:
-            return self.destination_bonus, curr_delay
 
         if port_blocked:
             return 0, curr_delay
