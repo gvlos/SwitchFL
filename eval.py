@@ -13,9 +13,9 @@ import argparse
 
 if __name__=='__main__':
 
-    config_path = "/home/gianvito/Desktop/debug_q_learning_env2/exp_0/config.ini"
-    model_path = "/home/gianvito/Desktop/debug_q_learning_env2/exp_0/distr_q_model.pkl"
-    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2/exp_0"
+    config_path = "/home/gianvito/Desktop/debug_q_learning_env2_bis5/exp_0/config.ini"
+    model_path = "/home/gianvito/Desktop/debug_q_learning_env2_bis5/exp_0/distr_q_model.pkl"
+    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2_bis5/exp_0"
 
     config = configparser.ConfigParser()
     config.read(config_path)
@@ -58,4 +58,4 @@ if __name__=='__main__':
                         seed = int(config["MISC"]["random_seed"]))
     
     model.load(model_path)
-    model.test(out_dir=out_dir, plot=True)
+    model.test(out_dir=out_dir, plot=False)

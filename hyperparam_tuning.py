@@ -6,9 +6,8 @@ from itertools import product
 if __name__=='__main__':
     
     random_seed = 13
-    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2_bis"
-    venv_dir = "/home/gianvito/Documents/SwitchFL-1/venv_sfl"
-    checkpoint_freq = 5_000
+    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2_bis5"
+    checkpoint_freq = 10_000
 
     width = 40
     height = 40
@@ -40,7 +39,7 @@ if __name__=='__main__':
     gamma = 1.
     default_q = 0.
 
-    num_episodes = 1_000
+    num_episodes = 5_000
 
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 
                         for values in product(*hyperparams.values())))

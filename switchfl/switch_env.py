@@ -134,7 +134,7 @@ class _SwitchEnv:
 
         self.prev_actions = {train.handle: None for train in self.rail_env.agents}
         self.train_to_last_node = {train.handle: (None, compute_delay(
-            self.rail_env, train, train.initial_position, train.initial_direction)) for train in self.rail_env.agents}
+            self.rail_env, train, train.initial_position, train.initial_direction, earliest_departure=True)) for train in self.rail_env.agents}
 
         self._move_trains_to_switch()
         self._init_semaphores()

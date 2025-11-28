@@ -14,7 +14,7 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 import numpy as np
 
-def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction):
+def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, earliest_departure=False) -> int:
     """
     Returns the delay of the given train
 
@@ -24,17 +24,19 @@ def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction):
     Returns:
         int: The delay of the given train
     """
-    # row, col = (
-    #     train.position if train.position is not None else train.initial_position
-    # )
 
     row, col = position
 
-    min_dist_to_target = rail_env.distance_map.get()[
+    min_dist_to_target = rail_env.distance_map.get(rail_env.agents)[
         train.handle, row, col, direction
     ]
 
-    delay = rail_env._elapsed_steps - train.latest_arrival + min_dist_to_target
+    # shortest_path = rail_env.distance_map.get_shortest_paths(max_depth=None, agents = rail_env.agents, agent_handle=train.handle)[train.handle]
+    # min_dist_to_target = len(shortest_path) - 1
+    if earliest_departure:
+        delay = train.earliest_departure - train.latest_arrival + min_dist_to_target
+    else:
+        delay = rail_env._elapsed_steps - train.latest_arrival + min_dist_to_target
     # assume you are moving with max speed=1
     return delay
 
@@ -180,16 +182,11 @@ class StandardObserver(_Observer):
 
         train_at_ports = rail_network._train2next_port
 
-
-        # logging_var = {k: t.handle for k, t in train_at_ports.items()}
-        # self.logger.debug(f"train at ports {logging_var}")
         self.logger.debug(f"next port for each train: {rail_network._train2next_port}")
         self.logger.debug(f"current agent: {agent} with position {switch.id}")
         train_counter = 0  # debugging
         active_train_handle = env.active_train
         train = env.rail_env.agents[active_train_handle]
-        # node_semaphore_dict = {get_node_id_on_port_id(p): p for p in rail_network.semaphores.keys()}
-
         
         for port in switch.get_port_nodes():  # Get port IDs of this node
             self.logger.debug(f"port {port} coming from cell {switch.switch_graph.nodes.data('rail_prev_node')[port]}")
