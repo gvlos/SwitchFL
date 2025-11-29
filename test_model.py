@@ -20,7 +20,7 @@ mf = ParamMalfunctionGen(stochastic_data)
 
 if __name__=='__main__':
 
-    out_dir = '/home/gianvito/Desktop/debug_q_learning_env2'
+    out_dir = '/home/gianvito/Desktop/debug'
     os.makedirs(out_dir, exist_ok=True)
 
 
@@ -40,19 +40,19 @@ if __name__=='__main__':
     #     malfunction_generator=mf
     # )
 
-    random_seed = 15
+    random_seed = 18
     rail_env = RailEnv(
-        width=40,
-        height=40,
+        width=80,
+        height=80,
         rail_generator=sparse_rail_generator(
-            max_num_cities=7,
+            max_num_cities=25,
             grid_mode=True,
             max_rails_between_cities=1,
             max_rail_pairs_in_city=1,
             seed=random_seed,
         ),
         line_generator=sparse_line_generator(seed=random_seed),
-        number_of_agents=5,
+        number_of_agents=15,
         malfunction_generator=mf
     )
 
@@ -61,13 +61,13 @@ if __name__=='__main__':
     model = DistrQLearning(env=env,
                            gamma = 1.,
                            epsilon = 1.0,
-                           epsilon_decay_rate = 0.9999,
+                           epsilon_decay_rate = 0.9998,
                            lr = 0.1,
-                           lr_decay_rate = 0.9999,
+                           lr_decay_rate = 1.0,
                            default_q = 0.,
                            seed = random_seed)
     
     
-    model.learn(num_episodes=100, out_dir=out_dir, checkpoint_freq=50)
+    model.learn(num_episodes=100, out_dir=out_dir, checkpoint_freq=10000)
 
     model.save(os.path.join(out_dir, "distr_q_model.pkl"))

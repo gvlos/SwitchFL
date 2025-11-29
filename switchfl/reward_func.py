@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from switchfl.observer import compute_delay
 from flatland.envs.rail_env import RailEnvActions
+import numpy as np
 
 
 class _RewardFunction(ABC):
@@ -54,6 +55,11 @@ class StandardRewardFunction(_RewardFunction):
                 reward = delay_diff - self.stop_penalty
             else:
                 reward = delay_diff
+
+        if np.isnan(reward):
+            print("NaN reward encountered!")
+            print(f"Train {train.handle} Train position: {train.position}, direction: {train.direction}")
+            print(f"curr_delay: {curr_delay}, last_delay: {last_delay}, delay_diff: {delay_diff}")
         
             return reward, curr_delay
 

@@ -492,6 +492,7 @@ class _SwitchEnv:
                     break
                 last_pos = current_position
                 last_dir = current_direction
+                next_actions = self.rail_env.rail.get_valid_move_actions_(last_dir, last_pos)
                 (
                     new_cell_valid,
                     (current_position,
@@ -499,7 +500,7 @@ class _SwitchEnv:
                     transition_valid,
                     preprocessed_action,
                 ) = self.rail_env.rail.check_action_on_agent(
-                    RailEnvActions.MOVE_FORWARD,
+                    next_actions[0].action,
                     (current_position,
                     current_direction),
                 )

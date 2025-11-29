@@ -27,7 +27,6 @@ def launch_experiment(config_path):
     mf = ParamMalfunctionGen(stochastic_data)
 
 
-    random_seed = config["MISC"]["random_seed"]
     rail_env = RailEnv(
         width=int(config["ENV"]["width"]),
         height=int(config["ENV"]["height"]),

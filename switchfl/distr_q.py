@@ -139,8 +139,8 @@ class DistrQLearning:
         """
 
         cum_reward = np.zeros(num_episodes)
-        arrived_trains = np.zeros(num_episodes)
-        delays = [[] for _ in range(num_episodes)]
+        arrived_trains = []
+        delays = []
         agent_num_interactions = {agent: 0 for agent in self.env.agents}
 
         rng = np.random.default_rng(self.seed)
@@ -230,8 +230,8 @@ class DistrQLearning:
                 # plt.savefig(os.path.join(out_dir, f"learn_iter_{num_iter}.png"), dpi=300)
                 # plt.close()
 
-            arrived_trains[t] = len(post_step_info["arrived_trains"])
-            delays[t] = [v[1] for v in list(self.env.train_to_last_node.values())]
+            arrived_trains.append(len(post_step_info["arrived_trains"]))
+            delays.append([v[1] for v in list(self.env.train_to_last_node.values())])
 
         np.savez_compressed(os.path.join(out_dir, 'cum_reward.npz'), x=cum_reward)
         np.savez_compressed(os.path.join(out_dir, 'arrived_trains.npz'), x=arrived_trains)
@@ -331,8 +331,8 @@ class DistrQLearning:
         """
         self.__check_entry(state, agent)
         max_q = np.argmax(self.q_table[tuple(state)])
-        print(f"Action mask={action_mask}")
-        print(f"Q-entry: {self.q_table[tuple(state)]}")
+        # print(f"Action mask={action_mask}")
+        # print(f"Q-entry: {self.q_table[tuple(state)]}")
         if action_mask[max_q]:
             return max_q
         else:

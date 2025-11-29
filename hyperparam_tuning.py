@@ -5,16 +5,16 @@ from itertools import product
 
 if __name__=='__main__':
     
-    random_seed = 13
-    out_dir = "/home/gianvito/Desktop/debug_q_learning_env2_bis5"
-    checkpoint_freq = 10_000
+    random_seed = 18
+    out_dir = "/home/gianvito/Desktop/15_agents"
+    checkpoint_freq = 2_000
 
-    width = 40
-    height = 40
-    max_num_cities = 7
+    width = 80
+    height = 80
+    max_num_cities = 25
     max_rails_between_cities = 1
     max_rail_pairs_in_city = 1
-    number_of_agents = 5
+    number_of_agents = 15
     malfunction_rate = 0.
     min_duration = 0
     max_duration = 0
@@ -39,7 +39,7 @@ if __name__=='__main__':
     gamma = 1.
     default_q = 0.
 
-    num_episodes = 5_000
+    num_episodes = 8_000
 
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 
                         for values in product(*hyperparams.values())))

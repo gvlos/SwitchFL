@@ -31,6 +31,9 @@ def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, ear
         train.handle, row, col, direction
     ]
 
+    if np.isnan(min_dist_to_target):
+        print("NaN min_dist_to_target encountered!")
+
     # shortest_path = rail_env.distance_map.get_shortest_paths(max_depth=None, agents = rail_env.agents, agent_handle=train.handle)[train.handle]
     # min_dist_to_target = len(shortest_path) - 1
     if earliest_departure:
