@@ -8,7 +8,7 @@ from flatland.envs.rail_env import RailEnv, RailEnvActions
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.agent_utils import Grid4TransitionsEnum
 from switchfl import NodeId, PortId, TrainAgentHandle
-from switchfl.switch_agents import _Switch, get_switch_type
+from switchfl.switch_agents import _Switch, build_switch_to_rail_actions, get_switch_type
 from switchfl.utils.logging import format_logger
 from switchfl.utils.naming import get_node_id_on_port_id, switch_id2name
 from switchfl.utils.rail_graph import (
@@ -48,7 +48,9 @@ def build_switch_network(rail_network: nx.Graph) -> nx.Graph:
                 neighbor_port_df.index.item(),
             )
 
-        switch = get_switch_type(switch_graph)(node, switch_graph, port2neighbor)
+        res = build_switch_to_rail_actions(switch_graph)
+
+        switch = get_switch_type(switch_graph.nodes, res[1])(node, switch_graph, port2neighbor)
 
         switch_network.add_node(
             node,

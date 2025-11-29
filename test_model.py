@@ -42,17 +42,17 @@ if __name__=='__main__':
 
     random_seed = 18
     rail_env = RailEnv(
-        width=80,
-        height=80,
+        width=120,
+        height=120,
         rail_generator=sparse_rail_generator(
-            max_num_cities=25,
+            max_num_cities=50,
             grid_mode=True,
-            max_rails_between_cities=1,
-            max_rail_pairs_in_city=1,
+            max_rails_between_cities=3,
+            max_rail_pairs_in_city=3,
             seed=random_seed,
         ),
         line_generator=sparse_line_generator(seed=random_seed),
-        number_of_agents=15,
+        number_of_agents=40,
         malfunction_generator=mf
     )
 

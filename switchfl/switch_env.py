@@ -489,6 +489,7 @@ class _SwitchEnv:
                     is not None
                 ):
                     # train on switch
+                    switch = self.rail_network.get_switch_on_position(current_position)
                     break
                 last_pos = current_position
                 last_dir = current_direction
@@ -508,7 +509,13 @@ class _SwitchEnv:
             # last pos corresponds to rail_prev_node
             # NOTE: getting the port based on position and direction could be bugged
             # if the first switch is directly behind a turn in the rail
-            port = self.rail_network.get_port_on_position(last_pos, last_dir)
+            # port = self.rail_network.get_port_on_position(last_pos, current_direction)
+            for p in switch.get_port_nodes():
+                port_prev_node = self.rail_network.rail_graph.nodes.data("rail_prev_node")[p]
+                if port_prev_node == last_pos:
+                    port = p
+                    break
+
             self.logger.debug(f"port: {port}")
             self.rail_network.semaphores[port] = (train.handle, 'out', last_dir)
             self.rail_network.set_trains_next_port(train, port)

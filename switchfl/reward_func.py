@@ -56,10 +56,10 @@ class StandardRewardFunction(_RewardFunction):
             else:
                 reward = delay_diff
 
-        if reward is None or np.isnan(reward):
-            print("NaN reward encountered!")
-            print(f"Train {train.handle} Train position: {train.position}, direction: {train.direction}")
-            print(f"curr_delay: {curr_delay}, last_delay: {last_delay}, delay_diff: {delay_diff}")
+            if reward is None or np.isnan(reward):
+                print("NaN reward encountered!")
+                print(f"Train {train.handle} Train position: {train.position}, direction: {train.direction}")
+                print(f"curr_delay: {curr_delay}, last_delay: {last_delay}, delay_diff: {delay_diff}")
         
             return reward, curr_delay
 

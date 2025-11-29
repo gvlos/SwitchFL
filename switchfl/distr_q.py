@@ -60,6 +60,7 @@ class DistrQLearning:
         """
         if tuple(state) not in self.q_table:
             self.q_table[tuple(state)] = self.default * self.env.action_space(agent).n
+        self.q_table[tuple(state)][-1] = -300  # STOP_MOVING penalty
 
     def __decay_epsilon(self, agent, t):
         """

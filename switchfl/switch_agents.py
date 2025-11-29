@@ -217,7 +217,7 @@ class Switch2(_Switch):
         # ----------
         # g  w  g  w
         # w  g  w  g
-        return spaces.Discrete(3, seed=seed)
+        return spaces.Discrete(5, seed=seed)
 
 
 # Intersection with one pass
@@ -261,16 +261,16 @@ class Switch4(_Switch):
 
 
 SWITCH_AGENT_MAP = {
-    (3, 2): Switch1,
-    (4, 2): Switch2,
-    (4, 3): Switch3,
-    (4, 4): Switch4,
+    (3, 4): Switch1,
+    (4, 4): Switch2,
+    (4, 6): Switch3,
+    (4, 8): Switch4,
 }
 
 
-def get_switch_type(switch_graph: nx.Graph) -> Type[_Switch]:
-    n_gaits = len(switch_graph.nodes)
-    n_rails = len(switch_graph.edges)
+def get_switch_type(nodes, edges) -> Type[_Switch]:
+    n_gaits = len(nodes)
+    n_rails = len(edges)
     try:
         return SWITCH_AGENT_MAP[(n_gaits, n_rails)]
     except KeyError:
