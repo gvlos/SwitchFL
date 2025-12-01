@@ -7,6 +7,7 @@ import numpy as np
 import os
 from switchfl.distr_q import DistrQLearning
 from flatland.envs.malfunction_generators import MalfunctionParameters, ParamMalfunctionGen
+import time
 
 
 
@@ -56,6 +57,8 @@ if __name__=='__main__':
         malfunction_generator=mf
     )
 
+    num_episodes = 5
+
     env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
 
     model = DistrQLearning(env=env,
@@ -68,6 +71,19 @@ if __name__=='__main__':
                            seed = random_seed)
     
     
-    model.learn(num_episodes=100, out_dir=out_dir, checkpoint_freq=10000)
+    start_time = time.time()
+
+    model.learn(num_episodes=num_episodes, out_dir=out_dir, checkpoint_freq=10000)
 
     model.save(os.path.join(out_dir, "distr_q_model.pkl"))
+
+    elapsed_time = time.time() - start_time
+    print("DONE!")
+    print(f"TOTAL TIME: {elapsed_time:.1f} seconds")
+    print(f"Seconds per episode: {elapsed_time / num_episodes:.1f}")
+    print(f"Flatland step time: {env.flatland_step_time:.1f} seconds")
+    print(f"Total step time: {env.step_time:.1f} seconds")
+    print(f"Total last time: {env.last_time:.1f} seconds")
+    print(f"Action selection time: {env.action_selection_time:.1f} seconds")
+    print(f"Update time: {env.update_time:.1f} seconds")
+    print(f"Reset time: {env.reset_time:.1f} seconds")

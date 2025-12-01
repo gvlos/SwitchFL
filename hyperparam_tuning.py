@@ -8,7 +8,7 @@ if __name__=='__main__':
     random_seed = 18
     out_dir = "/home/gianvito/Desktop/debug_15_agents"
     
-    num_episodes = 5000
+    num_episodes = 5
     checkpoint_freq = 2000
 
     width = 80
@@ -42,7 +42,7 @@ if __name__=='__main__':
     default_q = 0.
 
     # ----------------------------------------------------------------------
-    
+
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 
                         for values in product(*hyperparams.values())))
     

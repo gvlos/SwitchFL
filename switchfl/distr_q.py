@@ -3,8 +3,8 @@ import numpy as np
 import pickle
 import os
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 from flatland.utils.rendertools import AgentRenderVariant
+import time
 
 # class Grid4TransitionsEnum(IntEnum):
 #     NORTH = 0
@@ -60,7 +60,6 @@ class DistrQLearning:
         """
         if tuple(state) not in self.q_table:
             self.q_table[tuple(state)] = self.default * self.env.action_space(agent).n
-        self.q_table[tuple(state)][-1] = -300  # STOP_MOVING penalty
 
     def __decay_epsilon(self, agent, t):
         """
@@ -147,6 +146,11 @@ class DistrQLearning:
 
         rng = np.random.default_rng(self.seed)
 
+        last_time = 0.
+        action_selection_time = 0.
+        update_time = 0.
+        # reset_time = 0.
+
         for t in range(num_episodes):
 
             update_dict = {}
@@ -160,11 +164,15 @@ class DistrQLearning:
                 np.savez_compressed(os.path.join(out_dir, f'delays_checkpoint_{t+1}.npz'), x=delays)
                 np.savez_compressed(os.path.join(out_dir, f'trains_at_dest_checkpoint_{t+1}.npz'), x=trains_at_destination)
 
+            # start_reset_time = time.time()
             self.env.reset(seed=self.seed)
+            # reset_time += time.time() - start_reset_time
 
             for agent in self.env.agent_iter():
 
+                start_last_time = time.time()
                 observation, reward, termination, truncation, info = self.env.last()
+                last_time += time.time() - start_last_time
                 # print("--------------------------------------")
                 # print(f"Observation: {observation}")
                 # print(f"Reward: {reward}")
@@ -172,6 +180,7 @@ class DistrQLearning:
                 if termination or truncation:
                     break
 
+                start_action_selection_time = time.time()
                 self.__decay_epsilon(agent, agent_num_interactions[agent])
                 if rng.random() < self.epsilon[agent]:
                     self.env.action_space(agent).seed(int(rng.integers(0, np.iinfo(np.int32).max)))
@@ -180,10 +189,12 @@ class DistrQLearning:
                 else:
                     action = self.max_action(observation, agent, info["action_mask"])
                     # print(f"Max action: {action}")
+                action_selection_time += time.time() - start_action_selection_time
 
                 post_step_info = self.env.step(action)
                 active_train = info["active_train"]
 
+                start_update_time = time.time()
                 agent_id = name2switch_id(agent)
                 # Può accadere che le observation consecutive sono di switch non consecutivi quindi bisogna selezionare l'observation giusta per fare l'update
                 if (agent_id, active_train) in update_dict:
@@ -216,6 +227,8 @@ class DistrQLearning:
                                             next_agent=None,
                                             agent_num_interactions=agent_num_interactions)
                                 del update_dict[upd_agent, upd_train]
+
+                update_time += time.time() - start_update_time
                 
                 cum_reward[t] += reward
                 num_iter += 1
@@ -240,6 +253,10 @@ class DistrQLearning:
         np.savez_compressed(os.path.join(out_dir, 'arrived_trains.npz'), x=arrived_trains)
         np.savez_compressed(os.path.join(out_dir, 'delays.npz'), x=delays)
         np.savez_compressed(os.path.join(out_dir, 'trains_at_dest.npz'), x=post_step_info["arrived_trains"])
+        self.env.last_time = last_time
+        self.env.action_selection_time = action_selection_time
+        self.env.update_time = update_time
+        # self.env.reset_time = reset_time
         self.env.close()
 
     def _get_next_q_agent(self, agent, action):
@@ -341,8 +358,8 @@ class DistrQLearning:
             return max_q
         else:
             # If the action with max Q-value is not allowed, choose among allowed actions
-            allowed_actions = [a for a in range(len(action_mask)) if action_mask[a]]
-            allowed_q_values = [self.q_table[tuple(state)][a] for a in allowed_actions]
+            allowed_actions = np.nonzero(action_mask)[0]
+            allowed_q_values = np.array(self.q_table[tuple(state)])[allowed_actions]
             return allowed_actions[np.argmax(allowed_q_values)]
 
     def save(self, filename: str, mode: str = 'pickle'):

@@ -66,6 +66,10 @@ class _SwitchEnv:
 
         self.flatland_step_time = 0.
         self.step_time = 0.
+        self.last_time = 0.
+        self.action_selection_time = 0.
+        self.update_time = 0.
+        self.reset_time = 0.
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -90,7 +94,9 @@ class _SwitchEnv:
         # as Flatland may use various random number generators internally during reset
         if seed is not None:
             set_seed(seed)
+        start_reset_time = time.time()
         obs, info = self.rail_env.reset(random_seed=seed)
+        self.reset_time += time.time() - start_reset_time
         
         # NOTE: Force deterministic agent ordering and handle assignment
         # This works around Flatland's non-deterministic train assignment
@@ -110,6 +116,7 @@ class _SwitchEnv:
             
             # Update the agents list to be in sorted order
             self.rail_env.agents = sorted_agents
+        
         
         self.rail_network.reset()
 
