@@ -209,14 +209,16 @@ class _SwitchEnv:
         current_switch = self.rail_network.get_switch_on_position(node_id)
 
         # update train_action_plan such that move_trains step can work it down
-        moving_train, train_actions = self.rail_network.get_train_actions(
+        moving_train, next_train_actions = self.rail_network.get_train_actions(
             node_id, action, self.active_train
         )
 
+        train_agent_handle = self.active_train
+
         # if the action is stop moving take the next port corresponding to next action
-        if list(train_actions.values())[0] == [RailEnvActions.STOP_MOVING]:
+        if next_train_actions[0] == RailEnvActions.STOP_MOVING:
             # in and out port of the traversing switch
-            in_port = self.rail_network._train2next_port[self.active_train]
+            in_port = self.rail_network._train2next_port[train_agent_handle]
             out_port = in_port
         else:
             in_port, out_port = current_switch.action_outcomes[action]
@@ -233,41 +235,37 @@ class _SwitchEnv:
             next_port = None
         
         self.logger.debug(f"existing plan: {self.train_action_plan}")
-        self.logger.debug(f"new actions: {train_actions}")
+        self.logger.debug(f"new actions: {next_train_actions}")
 
-        # TODO: This for loop is USELESS, it enters only once
-        for train_agent_handle in train_actions.keys():
-            # adapt next train actions
-            # NOTE: if two switches are direct neighbors, the first given train action for the moving train
-            # has to be replaced by the last action of the train_action plan because otherwise the environment
-            # will send the train forward which messes up the scheduling and planning
-            next_train_actions = train_actions[train_agent_handle]
-            
-            if (
-                moving_train is not None
-                and len(self.train_action_plan[train_agent_handle]) > 0
-            ):
-                # cut away the MOVE_FORWARD action of the new plan, because
-                # moving into the new switch is done by the action from the previous switch
-                next_train_actions.pop(0)
-                if len(self.train_action_plan[train_agent_handle]) > 1:
-                    self.train_action_plan[train_agent_handle] = self.train_action_plan[train_agent_handle][:1] 
-                self.train_action_plan[train_agent_handle].extend(next_train_actions)
-            elif (
-                moving_train is None
-            ):
-                self.train_action_plan[train_agent_handle].insert(0, RailEnvActions.STOP_MOVING)
-            else:
-                self.train_action_plan[train_agent_handle].extend(next_train_actions)
+        # adapt next train actions
+        # NOTE: if two switches are direct neighbors, the first given train action for the moving train
+        # has to be replaced by the last action of the train_action plan because otherwise the environment
+        # will send the train forward which messes up the scheduling and planning          
+        if (
+            moving_train is not None
+            and len(self.train_action_plan[train_agent_handle]) > 0
+        ):
+            # cut away the MOVE_FORWARD action of the new plan, because
+            # moving into the new switch is done by the action from the previous switch
+            next_train_actions.pop(0)
+            if len(self.train_action_plan[train_agent_handle]) > 1:
+                self.train_action_plan[train_agent_handle] = self.train_action_plan[train_agent_handle][:1] 
+            self.train_action_plan[train_agent_handle].extend(next_train_actions)
+        elif (
+            moving_train is None
+        ):
+            self.train_action_plan[train_agent_handle].insert(0, RailEnvActions.STOP_MOVING)
+        else:
+            self.train_action_plan[train_agent_handle].extend(next_train_actions)
 
-            reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
-                                                  self.train_action_plan[train_agent_handle],
-                                                  self.train_to_last_node,
-                                                  self.observer.semaphore)
+        reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
+                                                self.train_action_plan[train_agent_handle],
+                                                self.train_to_last_node,
+                                                self.observer.semaphore)
 
-            self._cumulative_rewards[switch_id2name(next_switch.id)] = reward
-            
-            self.train_to_last_node[train_agent_handle] = (node_id, curr_delay)
+        self._cumulative_rewards[switch_id2name(next_switch.id)] = reward
+        
+        self.train_to_last_node[train_agent_handle] = (node_id, curr_delay)
 
         self.logger.debug(f"updated_plan: {self.train_action_plan}")
         return next_switch.id
@@ -512,9 +510,6 @@ class _SwitchEnv:
                 )
 
             # last pos corresponds to rail_prev_node
-            # NOTE: getting the port based on position and direction could be bugged
-            # if the first switch is directly behind a turn in the rail
-            # port = self.rail_network.get_port_on_position(last_pos, current_direction)
             for p in switch.get_port_nodes():
                 port_prev_node = self.rail_network.rail_graph.nodes.data("rail_prev_node")[p]
                 if port_prev_node == last_pos:

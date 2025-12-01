@@ -131,7 +131,7 @@ class _Switch(ABC):
 
     def get_train_action(
         self, action: int, active_train: int, train_to_port: Dict[TrainAgentHandle, PortId]
-    ) -> Tuple[TrainAgent | None, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+    ) -> Tuple[int | None, List[RailEnvActions]]:
         """For the given trains which are about to enter this switch, return the actions sequences for each train
 
         Args:
@@ -139,32 +139,27 @@ class _Switch(ABC):
             train_agents (List[TrainAgent]): all trains on the grid
 
         Returns:
-            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+            Tuple[int, List[RailEnvActions]]:
                 - train agent which is moving / crossing the switch.
                     If all currently positioned trains have to wait -> return None.
                 - For each train at the switch return actions to perform
         """
 
-        result = {}
+        result = []
         moving_train = None
 
         port_node = train_to_port.get(active_train)
 
         # Only the train at this switch port can get an action
         if action == len(self.actions):
-            result[active_train] = [RailEnvActions.STOP_MOVING]
+            result = [RailEnvActions.STOP_MOVING]
         else:
             if port_node in self.actions[action]:
                 actions = self.actions[action][port_node].copy()
-                result[active_train] = actions
+                result = actions
             
                 if actions[0] != RailEnvActions.STOP_MOVING:
                     moving_train = active_train
-
-        if len(result) == 0:
-            print(
-                f"No train is at switch {self.id} for action {action}"
-            )
 
         return moving_train, result
 

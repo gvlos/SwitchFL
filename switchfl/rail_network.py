@@ -251,6 +251,7 @@ class RailNetwork:
         return next_switch, target_port
 
     def map_direction(self, port):
+        """map port to flatland direction"""
         d = round((port[0] - int(port[0])) * 10)
         if d == 1:
             return 1
@@ -266,7 +267,10 @@ class RailNetwork:
 
         Args:
             source (PortId): the port a train entered a switch
-            target (PortId): the port through a train will enter next
+            out_port (PortId): the port the train will leave the switch
+            target (PortId): the port though which the train will enter the next switch
+            train (TrainAgent): train entering the switch
+            next_switch (_Switch): the next switch the train will arrive at
         """
 
         # free previous semaphores occupied by the train
@@ -279,28 +283,23 @@ class RailNetwork:
                 if p in self.semaphores and self.semaphores[p][0] == train.handle:
                     del self.semaphores[p]
 
+        # set new semaphores occupied by the train
         self.semaphores[out_port] = (train.handle, 'out', self.map_direction(out_port))
         self.semaphores[target] = (train.handle, 'in', self.map_direction(target))
 
         # find all edges related to target
-        edge_list = []
-        for edge in self.rail_graph.edges:
-            if edge[0] == target or edge[1] == target:
-                edge_list.append(edge)
+        edge_list = list(self.rail_graph.edges(target))
 
-        # find the current active edge and set it as occupied
+        # find the current active edge
         for edge in edge_list:
             if edge[0] == out_port or edge[1] == out_port:
                 moving_edge = edge
         edge_list.remove(moving_edge)
 
-        # if there is only one port at the end of the edge, find the next edge and add it to the occupied edges
+        # if there is only one port at the end of the edge, find the next edge and set the semaphores
         if len(edge_list) == 1:
             unique_port = edge_list[0][0] if edge_list[0][0] != target else edge_list[0][1]
-            prox_list = []
-            for edge in self.rail_graph.edges:
-                if edge[0] == unique_port or edge[1] == unique_port:
-                    prox_list.append(edge)
+            prox_list = list(self.rail_graph.edges(unique_port))
             edges_toremove = []
             for edge in prox_list:
                 if get_node_id_on_port_id(edge[0]) == next_switch.id and get_node_id_on_port_id(edge[1]) == next_switch.id:
@@ -308,6 +307,7 @@ class RailNetwork:
             for edge in edges_toremove:
                 prox_list.remove(edge)
 
+            # Set the semaphores for the edges that have been identified
             out_edge = edge_list[0]
             for port in out_edge:
                 if port != source and port != out_port:
@@ -327,12 +327,10 @@ class RailNetwork:
 
         self.logger.debug(f"CURRENT SEMAPHORES: {self.semaphores}")
 
-        # TODO account for the case where the next switch is a simple intersections.
-        # In this case also the next semaphores have to be switched on
 
     def get_train_actions(
         self, node: NodeId, action: int, active_train: TrainAgent
-    ) -> Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+    ) -> Tuple[int, List[RailEnvActions]]:
         """get the sequence of train actions from switch action and the train which is moving / transitioning over the switch
 
         Args:
@@ -341,7 +339,7 @@ class RailNetwork:
             train_agents (List[TrainAgent]): list of all train agents on grid
 
         Returns:
-            Tuple[TrainAgent, Dict[TrainAgentHandle, List[RailEnvActions]]]:
+            Tuple[int, List[RailEnvActions]]:
                 - train agent which is moving / crossing the switch.
                     If all currently positioned trains have to wait -> return None.
                 - For each train at the switch return actions to perform
