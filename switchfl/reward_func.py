@@ -21,7 +21,7 @@ class StandardRewardFunction(_RewardFunction):
         self.destination_bonus = 500
         self.stop_penalty = 300
 
-    def __call__(self, train, train_actions, train_to_last_node, port_blocked):
+    def __call__(self, train, train_actions, train_to_last_node, semaphore) -> float:
         """
         Updates the rewards based on the current state of the environment
         """
@@ -44,22 +44,19 @@ class StandardRewardFunction(_RewardFunction):
 
         curr_delay = compute_delay(self.rail_env, train, new_position, new_direction)
 
-        if port_blocked:
-            return 0, curr_delay
+        _, last_delay = train_to_last_node[train.handle]
+                
+        delay_diff = last_delay - curr_delay
+
+        if np.sum(semaphore) == semaphore.size and train_actions[0] == RailEnvActions.STOP_MOVING:
+            reward = delay_diff - self.stop_penalty
         else:
-            _, last_delay = train_to_last_node[train.handle]
-                    
-            delay_diff = last_delay - curr_delay
+            reward = delay_diff
 
-            if train_actions[0] == RailEnvActions.STOP_MOVING:
-                reward = delay_diff - self.stop_penalty
-            else:
-                reward = delay_diff
-
-            if reward is None or np.isnan(reward):
-                print("NaN reward encountered!")
-                print(f"Train {train.handle} Train position: {train.position}, direction: {train.direction}")
-                print(f"curr_delay: {curr_delay}, last_delay: {last_delay}, delay_diff: {delay_diff}")
+        if reward is None or np.isnan(reward):
+            print("NaN reward encountered!")
+            print(f"Train {train.handle} Train position: {train.position}, direction: {train.direction}")
+            print(f"curr_delay: {curr_delay}, last_delay: {last_delay}, delay_diff: {delay_diff}")
         
-            return reward, curr_delay
+        return reward, curr_delay
 

@@ -82,7 +82,7 @@ def timetable_generator(agents: List[EnvAgent], distance_map: DistanceMap,
             shortest_path_segment_lengths[k % num_agents].append(len_handle_none(v))
         shortest_paths_lengths = [sum(l) for l in shortest_path_segment_lengths]
     else:
-        shortest_paths = distance_map.get_shortest_paths()
+        shortest_paths = distance_map.get_shortest_paths(agents=agents)
         shortest_paths_lengths = [len_handle_none(v) for k, v in shortest_paths.items()]
         shortest_path_segment_lengths = [[l] for l in shortest_paths_lengths]
 

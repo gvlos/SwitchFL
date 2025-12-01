@@ -95,28 +95,28 @@ class DistrQLearning:
         for agent in self.env.agent_iter():
 
             observation, reward, termination, truncation, info = self.env.last()
-            print("--------------------------------------")
-            print(f"Observation: {observation}")
-            print(f"Reward: {reward}")
+            # print("--------------------------------------")
+            # print(f"Observation: {observation}")
+            # print(f"Reward: {reward}")
 
             if termination or truncation:
                 break
             
             action = self.max_action(observation, agent, info["action_mask"])
 
-            print(f"Action:{action}")
+            # print(f"Action:{action}")
             post_step_info = self.env.step(action)
 
             if plot:
                 a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
                 fig, ax = plt.subplots(figsize=(8,8))
                 plt.imshow(a)
-                ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.width), minor=False)
-                ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.height), minor=False)
-                ax.xaxis.grid(True, which='major', color='black', linestyle='--')
-                ax.yaxis.grid(True, which='major', color='black', linestyle='--')
-                ax.set_xticklabels(np.arange(self.env.rail_env.width))
-                ax.set_yticklabels(np.arange(self.env.rail_env.height))
+                # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.width), minor=False)
+                # ax.set_yticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.height), minor=False)
+                # ax.xaxis.grid(True, which='major', color='black', linestyle='--')
+                # ax.yaxis.grid(True, which='major', color='black', linestyle='--')
+                # ax.set_xticklabels(np.arange(self.env.rail_env.width))
+                # ax.set_yticklabels(np.arange(self.env.rail_env.height))
                 plt.savefig(os.path.join(out_dir, f"iter_{num_iter}.png"), dpi=300)
                 plt.close()
 

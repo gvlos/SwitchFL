@@ -61,6 +61,9 @@ def launch_experiment(config_path):
     elapsed_time = time.time() - start_time
     print("DONE!")
     print(elapsed_time)
+    print("Seconds per episode: ", elapsed_time / int(config["MODEL"]["num_episodes"]))
+    print(f"Flatland time: {env.flatland_step_time:.4f} seconds")
+    print(f"Total step time: {env.step_time:.4f} seconds")
 
 if __name__=='__main__':
 

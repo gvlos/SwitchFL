@@ -21,6 +21,8 @@ from switchfl.utils.logging import format_logger, set_seed
 from switchfl.utils.naming import name2switch_id, switch_id2name, symmetric_string, get_node_id_on_port_id
 from switchfl.reward_func import StandardRewardFunction
 
+import time
+
 
 class _SwitchEnv:
     metadata = {"render_mode": ["human", "rgb_array", None]}
@@ -61,6 +63,9 @@ class _SwitchEnv:
         self.train_obs: Dict[TrainAgentHandle, Any]
         self.train_reward: Dict[TrainAgentHandle, float]
         self.train_info: Dict[TrainAgentHandle, Any]
+
+        self.flatland_step_time = 0.
+        self.step_time = 0.
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -255,12 +260,10 @@ class _SwitchEnv:
             else:
                 self.train_action_plan[train_agent_handle].extend(next_train_actions)
 
-            port_blocked = check_port_blocked(next_port, out_port, train_agent_handle, self.rail_network)
-
             reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
                                                   self.train_action_plan[train_agent_handle],
                                                   self.train_to_last_node,
-                                                  port_blocked)
+                                                  self.observer.semaphore)
 
             self._cumulative_rewards[switch_id2name(next_switch.id)] = reward
             
@@ -314,6 +317,7 @@ class _SwitchEnv:
                         f" from position {train.position} and direction {train.direction} to position {new_position}")
                     train_new_positions[handle] = (train.position, False)
 
+        start_time = time.time()
         # do rail env step
         (
             self.train_obs,
@@ -322,6 +326,7 @@ class _SwitchEnv:
             self.train_info,
         ) = self.rail_env.step(train_actions)
 
+        self.flatland_step_time += time.time() - start_time
 
         # Correct if flatland has stopped some trains that simultaneously try to enter the same cell
         for train in self.rail_env.agents:
@@ -583,6 +588,9 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
             )
 
     def step(self, action) -> Dict[str, Any]:
+
+        start_time = time.time()
+
         # check if current agent is still operating
         if (
             self.terminations[self.agent_selection]
@@ -611,6 +619,8 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
 
         # prepare info dict
         post_step_info = {"next_switch": next_switch, "arrived_trains" : arrived_trains}
+
+        self.step_time += time.time() - start_time
         return post_step_info
 
     def observe(self, agent) -> np.ndarray:

@@ -8,14 +8,14 @@ if __name__=='__main__':
     random_seed = 18
     out_dir = "/home/gianvito/Desktop/debug_15_agents"
     
-    num_episodes = 50
-    checkpoint_freq = 20
+    num_episodes = 5000
+    checkpoint_freq = 2000
 
     width = 80
     height = 80
     max_num_cities = 25
-    max_rails_between_cities = 1
-    max_rail_pairs_in_city = 1
+    max_rails_between_cities = 2
+    max_rail_pairs_in_city = 2
     number_of_agents = 15
     malfunction_rate = 0.
     min_duration = 0
