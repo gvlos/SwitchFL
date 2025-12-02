@@ -136,20 +136,21 @@ class DistrQLearning:
 
                     if next_switch_found:
 
-                        optimal_actions = []
+                        min_distance = float('inf')
                         for act_idx, action in enumerate(switch.action_outcomes):
 
                             _, out_port = action
                             _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
 
                             if get_node_id_on_port_id(next_port) == next_wp.position:
-                                optimal_actions.append(act_idx)
+                                distance = self.env.rail_network.get_port_distance(out_port, next_port)
+                                if distance < min_distance:
+                                    optimal_action = act_idx
+                                    min_distance = distance
 
                         for state in prod:
                             self.q_table[tuple(state)] = self.default * self.env.action_space(switch_id2name(switch.id)).n
-                            for optimal_action in optimal_actions:
-                                self.q_table[tuple(state)][optimal_action] = self.optimal_init # optimistic initialization
-
+                            self.q_table[tuple(state)][optimal_action] = self.optimal_init # optimistic initialization
 
 
     def test(self, out_dir=None, plot=False):
@@ -424,8 +425,8 @@ class DistrQLearning:
         """
         self.__check_entry(state, agent)
         max_q = np.argmax(self.q_table[tuple(state)])
-        # print(f"Action mask={action_mask}")
-        # print(f"Q-entry: {self.q_table[tuple(state)]}")
+        print(f"Action mask={action_mask}")
+        print(f"Q-entry: {self.q_table[tuple(state)]}")
         if action_mask[max_q]:
             return max_q
         else:
