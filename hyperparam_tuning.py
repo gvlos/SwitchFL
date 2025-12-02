@@ -2,11 +2,13 @@ import configparser
 import os
 import subprocess
 from itertools import product
+import shutil
+import pathlib
 
 if __name__=='__main__':
     
-    random_seed = 18
-    out_dir = "/home/gianvito/Desktop/flatland_exp/debug_init_q_bis"
+    random_seeds = [18, 20, 21, 13, 37]
+    out_dir = "/home/gianvito/Desktop/flatland_exp/5_agents_with_init"
     
     num_episodes = 2_000
     checkpoint_freq = 2_000
@@ -48,50 +50,54 @@ if __name__=='__main__':
     
     for idx, params in enumerate(model_param_list):
 
-        exp_dir = os.path.join(out_dir, f"exp_{idx}")
-        os.makedirs(exp_dir, exist_ok=True)
+        for rdx, random_seed in enumerate(random_seeds):
 
-        config = configparser.ConfigParser()
+            exp_dir = os.path.join(out_dir, f"exp_{idx}", f"seed_{rdx}")
+            os.makedirs(exp_dir, exist_ok=True)
 
-        config["MISC"] = {
-            "random_seed" : random_seed,
-            "out_dir" : exp_dir,
-            "checkpoint_freq" : checkpoint_freq
-        }
+            config = configparser.ConfigParser()
 
-        config["ENV"] = {
-            "width" : width,
-            "height" : height,
-            "max_num_cities" : max_num_cities,
-            "max_rails_between_cities" : max_rails_between_cities,
-            "max_rail_pairs_in_city" : max_rail_pairs_in_city,
-            "number_of_agents" : number_of_agents,
-            "malfunction_rate" : malfunction_rate,
-            "min_duration" : min_duration,
-            "max_duration" : max_duration
-        }
+            config["MISC"] = {
+                "random_seed" : random_seed,
+                "out_dir" : exp_dir,
+                "checkpoint_freq" : checkpoint_freq
+            }
 
-        config["MODEL"] = {
-            "gamma" : gamma,
-            "epsilon" : params["epsilon"],
-            "epsilon_decay_rate" : params["epsilon_decay_rate"],
-            "lr" : params["lr"],
-            "lr_decay_rate" : params["lr_decay_rate"],
-            "default_q" : default_q,
-            "num_episodes" : num_episodes
-        }
+            config["ENV"] = {
+                "width" : width,
+                "height" : height,
+                "max_num_cities" : max_num_cities,
+                "max_rails_between_cities" : max_rails_between_cities,
+                "max_rail_pairs_in_city" : max_rail_pairs_in_city,
+                "number_of_agents" : number_of_agents,
+                "malfunction_rate" : malfunction_rate,
+                "min_duration" : min_duration,
+                "max_duration" : max_duration
+            }
 
-        config_path = os.path.join(exp_dir, 'config.ini')
-        with open(config_path, 'w') as configfile:
-            config.write(configfile)
+            config["MODEL"] = {
+                "gamma" : gamma,
+                "epsilon" : params["epsilon"],
+                "epsilon_decay_rate" : params["epsilon_decay_rate"],
+                "lr" : params["lr"],
+                "lr_decay_rate" : params["lr_decay_rate"],
+                "default_q" : default_q,
+                "num_episodes" : num_episodes
+            }
 
-        # cmd = f"source {venv_dir}/bin/activate && which python3 &> out.out && python3 main.py -c {config_path} 1>{os.path.join(exp_dir, "stdout.out")} 2>{os.path.join(exp_dir, "stderr.err")} &"        
-        cmd = f"python main.py -c {config_path} 1>{os.path.join(exp_dir, "stdout.out")} 2>{os.path.join(exp_dir, "stderr.err")} &"
+            config_path = os.path.join(exp_dir, 'config.ini')
+            with open(config_path, 'w') as configfile:
+                config.write(configfile)
 
-        try:
-            print()
-            print('------------------------------------------------')
-            print(f"Starting experiment {idx+1}/{len(model_param_list)}")
-            subprocess.Popen(cmd, shell=True, executable='/bin/bash')
-        except subprocess.CalledProcessError as e:
-            print(str(e)) 
+            # cmd = f"source {venv_dir}/bin/activate && which python3 &> out.out && python3 main.py -c {config_path} 1>{os.path.join(exp_dir, "stdout.out")} 2>{os.path.join(exp_dir, "stderr.err")} &"        
+            cmd = f"python main.py -c {config_path} 1>{os.path.join(exp_dir, "stdout.out")} 2>{os.path.join(exp_dir, "stderr.err")} &"
+
+            try:
+                print()
+                print('------------------------------------------------')
+                print(f"Starting experiment {idx+1}/{len(model_param_list)} with seed {rdx+1}/{len(random_seeds)}")
+                subprocess.Popen(cmd, shell=True, executable='/bin/bash')
+            except subprocess.CalledProcessError as e:
+                print(str(e)) 
+
+    shutil.copyfile(pathlib.Path(__file__).resolve(), os.path.join(f"{out_dir}", "hyperparam_tuning.py"))
