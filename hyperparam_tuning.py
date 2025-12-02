@@ -6,17 +6,17 @@ from itertools import product
 if __name__=='__main__':
     
     random_seed = 18
-    out_dir = "/home/gianvito/Desktop/debug_15_agents"
+    out_dir = "/home/gianvito/Desktop/flatland_exp/debug_init_q_bis"
     
-    num_episodes = 5
-    checkpoint_freq = 2000
+    num_episodes = 2_000
+    checkpoint_freq = 2_000
 
-    width = 80
-    height = 80
-    max_num_cities = 25
-    max_rails_between_cities = 2
-    max_rail_pairs_in_city = 2
-    number_of_agents = 15
+    width = 40
+    height = 40
+    max_num_cities = 7
+    max_rails_between_cities = 1
+    max_rail_pairs_in_city = 1
+    number_of_agents = 5
     malfunction_rate = 0.
     min_duration = 0
     max_duration = 0
@@ -32,8 +32,8 @@ if __name__=='__main__':
     # max_duration = 0
 
     hyperparams = {
-        "epsilon" : [1.0],
-        "epsilon_decay_rate" : [0.9998],
+        "epsilon" : [0.4],
+        "epsilon_decay_rate" : [0.999],
         "lr" : [0.1],
         "lr_decay_rate" : [1.0],
     }

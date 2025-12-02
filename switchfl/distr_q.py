@@ -1,9 +1,11 @@
+import itertools
 from .switch_env import ASyncSwitchEnv, name2switch_id, switch_id2name
 import numpy as np
 import pickle
 import os
 import matplotlib.pyplot as plt
 from flatland.utils.rendertools import AgentRenderVariant
+from switchfl.utils.naming import get_node_id_on_port_id
 import time
 
 # class Grid4TransitionsEnum(IntEnum):
@@ -47,6 +49,8 @@ class DistrQLearning:
         self.default = [default_q] # MISSING NUMBER OF ACTIONS
         self.q_table = {}
         self.seed = seed
+        self.optimal_init = 500.
+        self.destination_bonus = 1000.
         # self.rng  = np.random.RandomState(seed)
 
     def __check_entry(self, state, agent):
@@ -82,6 +86,71 @@ class DistrQLearning:
             The episode number.
         """
         self.lr[agent] = self.initial_lr * (self.lr_decay_rate ** t)
+
+    def __init_q_table(self):
+        """
+        Initializes the Q-table.
+        """
+        for agent in self.env.rail_env.agents:
+            shortest_path = self.env.rail_env.distance_map.get_shortest_paths(
+                max_depth=None, agents = self.env.rail_env.agents, agent_handle=agent.handle)[agent.handle]
+
+            for wp_idx in range(len(shortest_path)):
+                wp = shortest_path[wp_idx]
+                switch = self.env.rail_network.get_switch_on_position(wp.position)
+                if switch is not None:
+                    num_ports = len(switch.get_port_nodes())
+
+                    semaphores = list(itertools.product([0, 1], repeat=num_ports))[1:]  # exclude all red
+                    delays = []
+                    for delay_range in range(3):
+                        for el in list(itertools.product([-1, delay_range], repeat=num_ports)):
+                            if np.sum(el) == -2 + delay_range:
+                                delays.append(el)
+
+                    targets = -1 * np.ones((num_ports, num_ports*2), dtype=np.int64)
+                    j = 0
+                    for i in range(num_ports):
+                        targets[i, j] = agent.target[0]
+                        targets[i, j+1] = agent.target[1]
+                        j += 2
+
+                    prod = list(itertools.product(semaphores, targets, delays))
+                    
+                    for idx, ele in enumerate(prod):
+                        prod[idx] = np.concatenate([wp.position,
+                                                    np.array(ele[0]).astype(int),
+                                                    ele[1].astype(int),
+                                                    np.array(ele[2]).astype(int)])
+
+                    next_switch_found = False
+                    if wp_idx < len(shortest_path):
+                        next_wp_idx = 1
+                        while next_wp_idx + wp_idx < len(shortest_path):
+                            next_wp = shortest_path[next_wp_idx + wp_idx]
+                            next_switch = self.env.rail_network.get_switch_on_position(next_wp.position)
+                            if next_switch is not None:
+                                next_switch_found = True
+                                break
+                            next_wp_idx += 1
+
+                    if next_switch_found:
+
+                        optimal_actions = []
+                        for act_idx, action in enumerate(switch.action_outcomes):
+
+                            _, out_port = action
+                            _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
+
+                            if get_node_id_on_port_id(next_port) == next_wp.position:
+                                optimal_actions.append(act_idx)
+
+                        for state in prod:
+                            self.q_table[tuple(state)] = self.default * self.env.action_space(switch_id2name(switch.id)).n
+                            for optimal_action in optimal_actions:
+                                self.q_table[tuple(state)][optimal_action] = self.optimal_init # optimistic initialization
+
+
 
     def test(self, out_dir=None, plot=False):
     
@@ -168,6 +237,9 @@ class DistrQLearning:
             self.env.reset(seed=self.seed)
             # reset_time += time.time() - start_reset_time
 
+            if t == 0:
+                self.__init_q_table()
+
             for agent in self.env.agent_iter():
 
                 start_last_time = time.time()
@@ -222,7 +294,7 @@ class DistrQLearning:
                             if upd_train == train:
                                 # print(f"Updating Q-values for ARRIVED TRAIN: agent={upd_previous_agent}, obs={upd_obs}, act={upd_act} with reward={500}, next state=None, next_agent=None")
                                 self.update(state=upd_obs, action=upd_act,
-                                            reward=500, next_state=None,
+                                            reward=self.destination_bonus, next_state=None,
                                             previous_agent=upd_previous_agent,
                                             next_agent=None,
                                             agent_num_interactions=agent_num_interactions)

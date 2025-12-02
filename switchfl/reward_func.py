@@ -18,7 +18,6 @@ class StandardRewardFunction(_RewardFunction):
     def __init__(self, rail_env):
         super().__init__()
         self.rail_env = rail_env
-        self.destination_bonus = 500
         self.stop_penalty = 300
 
     def __call__(self, train, train_actions, train_to_last_node, port_blocked) -> float:
@@ -64,12 +63,6 @@ class StandardRewardFunction(_RewardFunction):
                     reward = delay_diff - self.stop_penalty
                 else:
                     reward = delay_diff
-
-
-        if reward is None or np.isnan(reward):
-            print("NaN reward encountered!")
-            print(f"Train {train.handle} Train position: {train.position}, direction: {train.direction}")
-            print(f"curr_delay: {curr_delay}, last_delay: {last_delay}, delay_diff: {delay_diff}")
         
         return reward, curr_delay
 

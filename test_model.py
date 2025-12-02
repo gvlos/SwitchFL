@@ -43,27 +43,27 @@ if __name__=='__main__':
 
     random_seed = 18
     rail_env = RailEnv(
-        width=120,
-        height=120,
+        width=40,
+        height=40,
         rail_generator=sparse_rail_generator(
-            max_num_cities=50,
+            max_num_cities=7,
             grid_mode=True,
-            max_rails_between_cities=3,
-            max_rail_pairs_in_city=3,
+            max_rails_between_cities=1,
+            max_rail_pairs_in_city=1,
             seed=random_seed,
         ),
         line_generator=sparse_line_generator(seed=random_seed),
-        number_of_agents=40,
+        number_of_agents=5,
         malfunction_generator=mf
     )
 
-    num_episodes = 5
+    num_episodes = 1_000
 
     env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
 
     model = DistrQLearning(env=env,
                            gamma = 1.,
-                           epsilon = 1.0,
+                           epsilon = 0.3,
                            epsilon_decay_rate = 0.9998,
                            lr = 0.1,
                            lr_decay_rate = 1.0,
