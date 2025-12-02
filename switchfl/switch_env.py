@@ -265,10 +265,20 @@ class _SwitchEnv:
         else:
             self.train_action_plan[train_agent_handle].extend(next_train_actions)
 
+        if moving_train is not None:
+            port_blocked = [check_port_blocked(next_port, out_port, train_agent_handle, self.rail_network)]
+        else:
+            port_blocked = []
+            for p in current_switch.action_outcomes:
+                if p[0] == in_port:
+                    out_port = p[1]
+                    _, next_port = self.rail_network.get_neighbor_switch(out_port)
+                    port_blocked.append(check_port_blocked(out_port, next_port, train_agent_handle, self.rail_network))
+
         reward, curr_delay = self.reward_func(self.rail_env.agents[train_agent_handle],
                                                 self.train_action_plan[train_agent_handle],
                                                 self.train_to_last_node,
-                                                self.observer.semaphore)
+                                                port_blocked)
 
         self._cumulative_rewards[switch_id2name(next_switch.id)] = reward
         

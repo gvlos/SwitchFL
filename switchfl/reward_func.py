@@ -21,7 +21,7 @@ class StandardRewardFunction(_RewardFunction):
         self.destination_bonus = 500
         self.stop_penalty = 300
 
-    def __call__(self, train, train_actions, train_to_last_node, semaphore) -> float:
+    def __call__(self, train, train_actions, train_to_last_node, port_blocked) -> float:
         """
         Updates the rewards based on the current state of the environment
         """
@@ -48,10 +48,23 @@ class StandardRewardFunction(_RewardFunction):
                 
         delay_diff = last_delay - curr_delay
 
-        if np.sum(semaphore) == semaphore.size and train_actions[0] == RailEnvActions.STOP_MOVING:
-            reward = delay_diff - self.stop_penalty
+        if len(port_blocked) == 1:
+            if port_blocked[0]:
+                return 0, curr_delay
+            else:
+                if train_actions[0] == RailEnvActions.STOP_MOVING:
+                    reward = delay_diff - self.stop_penalty
+                else:
+                    reward = delay_diff
         else:
-            reward = delay_diff
+            if np.sum(port_blocked) == len(port_blocked):
+                return 0, curr_delay
+            else:
+                if train_actions[0] == RailEnvActions.STOP_MOVING:
+                    reward = delay_diff - self.stop_penalty
+                else:
+                    reward = delay_diff
+
 
         if reward is None or np.isnan(reward):
             print("NaN reward encountered!")

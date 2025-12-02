@@ -156,7 +156,6 @@ class StandardObserver(_Observer):
         self.delay_levels = delay_levels
 
         self.delay_threshold = delay_threshold  # arbitrary value
-        self.semaphore = np.array([])
 
     def _discretize_delay(self, train: TrainAgent, delay: int) -> int:
         """
@@ -184,8 +183,7 @@ class StandardObserver(_Observer):
         semaphore = []
         target = []
         delay = []
-        # arrived_trains = []
-
+        
         train_at_ports = rail_network._train2next_port
 
         self.logger.debug(f"next port for each train: {rail_network._train2next_port}")
@@ -233,7 +231,6 @@ class StandardObserver(_Observer):
         delay = np.array(delay).astype(int)
         observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
         info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle}
-        self.semaphore = semaphore
         return observation, info
     
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):
