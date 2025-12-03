@@ -70,6 +70,7 @@ class _SwitchEnv:
         self.action_selection_time = 0.
         self.update_time = 0.
         self.reset_time = 0.
+        self.reset_total_time = 0.
 
     @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
@@ -150,6 +151,8 @@ class _SwitchEnv:
 
         self._move_trains_to_switch()
         self._init_semaphores()
+
+        self.reset_total_time += time.time() - start_reset_time
 
     def render(self):
         if self.render_mode is None:

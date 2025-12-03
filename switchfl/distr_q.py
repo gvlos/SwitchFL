@@ -101,26 +101,47 @@ class DistrQLearning:
                 if switch is not None:
                     num_ports = len(switch.get_port_nodes())
 
+                    direction = self.env.rail_network.map_inverse_direction(wp.direction)
+                    in_port = tuple(pos + direction/10 for pos in wp.position)
+
                     semaphores = list(itertools.product([0, 1], repeat=num_ports))[1:]  # exclude all red
+                    # delays = []
+                    # for delay_range in range(3):
+                    #     for el in list(itertools.product([-1, delay_range], repeat=num_ports)):
+                    #         if np.sum(el) == -num_ports +1 + delay_range:
+                    #             delays.append(el)
+
+                    # targets = -1 * np.ones((num_ports, num_ports*2), dtype=np.int64)
+                    # j = 0
+                    # for i in range(num_ports):
+                    #     targets[i, j] = agent.target[0]
+                    #     targets[i, j+1] = agent.target[1]
+                    #     j += 2
                     delays = []
-                    for delay_range in range(3):
-                        for el in list(itertools.product([-1, delay_range], repeat=num_ports)):
-                            if np.sum(el) == -num_ports +1 + delay_range:
-                                delays.append(el)
+                    targets = []
 
-                    targets = -1 * np.ones((num_ports, num_ports*2), dtype=np.int64)
-                    j = 0
-                    for i in range(num_ports):
-                        targets[i, j] = agent.target[0]
-                        targets[i, j+1] = agent.target[1]
-                        j += 2
+                    for i in range(3):
+                        dl = []
+                        for port in switch.get_port_nodes():
+                            if port == in_port:
+                                dl.append(i)
+                            else:
+                                dl.append(-1)
+                        delays.append(tuple(dl))
 
-                    prod = list(itertools.product(semaphores, targets, delays))
+                    targets = -1 * np.ones(num_ports*2)
+                    
+                    for i, port in enumerate(switch.get_port_nodes()):
+                        if port == in_port:
+                            targets[i*2] = agent.target[0]
+                            targets[i*2+1] = agent.target[1]
+
+                    prod = list(itertools.product(semaphores, [tuple(targets)], delays))
                     
                     for idx, ele in enumerate(prod):
                         prod[idx] = np.concatenate([wp.position,
                                                     np.array(ele[0]).astype(int),
-                                                    ele[1].astype(int),
+                                                    np.array(ele[1]).astype(int),
                                                     np.array(ele[2]).astype(int)])
 
                     next_switch_found = False
@@ -134,19 +155,23 @@ class DistrQLearning:
                             break
                         next_wp_idx += 1
 
-                    if next_switch_found:
+                    min_distance = float('inf')
 
-                        min_distance = float('inf')
+                    if next_switch_found:
+    
                         for act_idx, action in enumerate(switch.action_outcomes):
 
-                            _, out_port = action
-                            _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
+                            if in_port == action[0]:
+                                _, out_port = action
+                                _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
 
-                            if get_node_id_on_port_id(next_port) == next_wp.position:
-                                distance = self.env.rail_network.get_port_distance(out_port, next_port)
-                                if distance < min_distance:
-                                    optimal_action = act_idx
-                                    min_distance = distance
+                                next_wp_dir = self.env.rail_network.map_inverse_direction(next_wp.direction)
+                                next_port_wp = tuple(pos + next_wp_dir/10 for pos in next_wp.position)
+                                if next_port == next_port_wp:
+                                    distance = self.env.rail_network.get_port_distance(out_port, next_port)
+                                    if distance < min_distance:
+                                        optimal_action = act_idx
+                                        min_distance = distance
 
                         for state in prod:
                             self.q_table[tuple(state)] = self.default * self.env.action_space(switch_id2name(switch.id)).n
@@ -154,21 +179,22 @@ class DistrQLearning:
 
                     else:  # final action towards target
                         
-                        min_distance = float('inf')
                         for act_idx, action in enumerate(switch.action_outcomes):
 
-                            _, out_port = action
-                            _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
+                            if in_port == action[0]:
 
-                            edge_data = self.env.rail_network.rail_graph.get_edge_data(out_port, next_port)
-                            rail_nodes = edge_data.get("rail_nodes", None)
+                                _, out_port = action
+                                _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
 
-                            for distance, node in enumerate(rail_nodes):
-                                if node == agent.target:
-                                    if distance < min_distance:
-                                        min_distance = distance
-                                        optimal_action = act_idx
-                                    break
+                                edge_data = self.env.rail_network.rail_graph.get_edge_data(out_port, next_port)
+                                rail_nodes = edge_data.get("rail_nodes", None)
+
+                                for distance, node in enumerate(rail_nodes):
+                                    if node == agent.target:
+                                        if distance < min_distance:
+                                            min_distance = distance
+                                            optimal_action = act_idx
+                                        break
 
                         for state in prod:
                             self.q_table[tuple(state)] = self.default * self.env.action_space(switch_id2name(switch.id)).n
@@ -216,10 +242,17 @@ class DistrQLearning:
 
         self.env.close()
         arrived_trains = len(post_step_info["arrived_trains"])
+        delays = [v[1] for v in list(self.env.train_to_last_node.values())]
         print(f"Terminated in {num_iter} steps ({self.env.rail_env._elapsed_steps} flatland steps), cumulative reward = {cum_reward}")
         print(f"Arrived trains: {arrived_trains} / {self.env.rail_env.get_num_agents()}")
         print(f"Trains at destination: {post_step_info['arrived_trains']}")
-        print(f"Delays: {[v[1] for v in list(self.env.train_to_last_node.values())]}")
+        print(f"Delays: {delays}")
+
+        np.savez_compressed(os.path.join(out_dir, f'trains_at_dest.npz'), x=post_step_info['arrived_trains'])
+        np.savez_compressed(os.path.join(out_dir, f'delays.npz'), x=delays)
+
+
+
 
     def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int):
         """

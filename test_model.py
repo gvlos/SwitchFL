@@ -41,7 +41,7 @@ if __name__=='__main__':
     #     malfunction_generator=mf
     # )
 
-    random_seed = 18
+    random_seed = 37
     rail_env = RailEnv(
         width=40,
         height=40,
@@ -57,14 +57,14 @@ if __name__=='__main__':
         malfunction_generator=mf
     )
 
-    num_episodes = 1_000
+    num_episodes = 2_000
 
     env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
 
     model = DistrQLearning(env=env,
                            gamma = 1.,
-                           epsilon = 0.3,
-                           epsilon_decay_rate = 0.9998,
+                           epsilon = 0.4,
+                           epsilon_decay_rate = 0.999,
                            lr = 0.1,
                            lr_decay_rate = 1.0,
                            default_q = 0.,

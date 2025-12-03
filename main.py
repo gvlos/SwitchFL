@@ -67,7 +67,8 @@ def launch_experiment(config_path):
     print(f"Total last time: {env.last_time:.1f} seconds")
     print(f"Action selection time: {env.action_selection_time:.1f} seconds")
     print(f"Update time: {env.update_time:.1f} seconds")
-    print(f"Reset time: {env.reset_time:.1f} seconds")
+    print(f"Flatland reset time: {env.reset_time:.1f} seconds")
+    print(f"Total reset time: {env.reset_total_time:.1f} seconds")
 
 if __name__=='__main__':
 

@@ -261,7 +261,18 @@ class RailNetwork:
             return 3
         else:
             return 2
-
+        
+    def map_inverse_direction(self, direction):
+        """map flatland direction to port direction"""
+        if direction == 1:
+            return 3
+        elif direction == 0:
+            return 4
+        elif direction == 3:
+            return 1
+        else:
+            return 2
+        
     def transition_semaphore(self, source: PortId, out_port: PortId, target: PortId, train: TrainAgent, next_switch: _Switch):
         """handle semaphore freeing and blocking if a train is moving from the given source port (source) and moving to the outgoing port.
 
