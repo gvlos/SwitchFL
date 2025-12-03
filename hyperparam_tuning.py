@@ -8,10 +8,10 @@ import pathlib
 if __name__=='__main__':
     
     random_seeds = [18, 20, 21, 13, 37]
-    out_dir = "/home/gianvito/Desktop/flatland_exp/5_agents_with_init"
+    out_dir = "/home/gianvito/Desktop/flatland_exp/5_agents_with_init_BIS"
     
     num_episodes = 2_000
-    checkpoint_freq = 2_000
+    checkpoint_freq = 5_000
 
     width = 40
     height = 40

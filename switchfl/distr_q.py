@@ -105,7 +105,7 @@ class DistrQLearning:
                     delays = []
                     for delay_range in range(3):
                         for el in list(itertools.product([-1, delay_range], repeat=num_ports)):
-                            if np.sum(el) == -2 + delay_range:
+                            if np.sum(el) == -num_ports +1 + delay_range:
                                 delays.append(el)
 
                     targets = -1 * np.ones((num_ports, num_ports*2), dtype=np.int64)
@@ -124,15 +124,15 @@ class DistrQLearning:
                                                     np.array(ele[2]).astype(int)])
 
                     next_switch_found = False
-                    if wp_idx < len(shortest_path):
-                        next_wp_idx = 1
-                        while next_wp_idx + wp_idx < len(shortest_path):
-                            next_wp = shortest_path[next_wp_idx + wp_idx]
-                            next_switch = self.env.rail_network.get_switch_on_position(next_wp.position)
-                            if next_switch is not None:
-                                next_switch_found = True
-                                break
-                            next_wp_idx += 1
+
+                    next_wp_idx = 1
+                    while next_wp_idx + wp_idx < len(shortest_path):
+                        next_wp = shortest_path[next_wp_idx + wp_idx]
+                        next_switch = self.env.rail_network.get_switch_on_position(next_wp.position)
+                        if next_switch is not None:
+                            next_switch_found = True
+                            break
+                        next_wp_idx += 1
 
                     if next_switch_found:
 
@@ -151,6 +151,28 @@ class DistrQLearning:
                         for state in prod:
                             self.q_table[tuple(state)] = self.default * self.env.action_space(switch_id2name(switch.id)).n
                             self.q_table[tuple(state)][optimal_action] = self.optimal_init # optimistic initialization
+
+                    else:  # final action towards target
+                        
+                        min_distance = float('inf')
+                        for act_idx, action in enumerate(switch.action_outcomes):
+
+                            _, out_port = action
+                            _, next_port = self.env.rail_network.get_neighbor_switch(out_port)
+
+                            edge_data = self.env.rail_network.rail_graph.get_edge_data(out_port, next_port)
+                            rail_nodes = edge_data.get("rail_nodes", None)
+
+                            for distance, node in enumerate(rail_nodes):
+                                if node == agent.target:
+                                    if distance < min_distance:
+                                        min_distance = distance
+                                        optimal_action = act_idx
+                                    break
+
+                        for state in prod:
+                            self.q_table[tuple(state)] = self.default * self.env.action_space(switch_id2name(switch.id)).n
+                            self.q_table[tuple(state)][optimal_action] = self.destination_bonus
 
 
     def test(self, out_dir=None, plot=False):
@@ -425,8 +447,8 @@ class DistrQLearning:
         """
         self.__check_entry(state, agent)
         max_q = np.argmax(self.q_table[tuple(state)])
-        print(f"Action mask={action_mask}")
-        print(f"Q-entry: {self.q_table[tuple(state)]}")
+        # print(f"Action mask={action_mask}")
+        # print(f"Q-entry: {self.q_table[tuple(state)]}")
         if action_mask[max_q]:
             return max_q
         else:
