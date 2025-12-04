@@ -213,6 +213,7 @@ class DistrQLearning:
 
             observation, reward, termination, truncation, info = self.env.last()
             # print("--------------------------------------")
+            # print(f"Active train: {self.env.active_train}")
             # print(f"Observation: {observation}")
             # print(f"Reward: {reward}")
 
@@ -438,10 +439,18 @@ class DistrQLearning:
 
         self.__decay_lr(previous_agent, agent_num_interactions[previous_agent])
 
+        # if tuple(state) == (40,45,1,1,1,0,-1,-1,57,76,-1,-1,-1,-1,-1,0,-1,-1):
+        #     print("Eccola")
+
         # print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
-        self.q_table[tuple(state)][action] = \
-            (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
-            self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
+        if next_agent != previous_agent:
+            self.q_table[tuple(state)][action] = \
+                (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
+                self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
+        else:
+            self.q_table[tuple(state)][action] = \
+                (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
+                self.lr[previous_agent] * reward
         # print(f"New Q-entry: {self.q_table[tuple(state)]}")
         # print("")
 

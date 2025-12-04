@@ -85,7 +85,7 @@ class RailNetwork:
         self.logger = logging.getLogger(type(self).__name__)
         self.logger = format_logger(self.logger)
 
-
+        self.rail_env = rail_env
         self.switch_network: nx.Graph
 
         self.rail_graph = build_rail_graph(rail_env)
@@ -295,8 +295,8 @@ class RailNetwork:
                     del self.semaphores[p]
 
         # set new semaphores occupied by the train
-        self.semaphores[out_port] = (train.handle, 'out', self.map_direction(out_port))
-        self.semaphores[target] = (train.handle, 'in', self.map_direction(target))
+        self.semaphores[out_port] = (train.handle, 'out', self.map_direction(out_port), self.rail_env._elapsed_steps)
+        self.semaphores[target] = (train.handle, 'in', self.map_direction(target), self.rail_env._elapsed_steps)
 
         # find all edges related to target
         edge_list = list(self.rail_graph.edges(target))
@@ -323,18 +323,18 @@ class RailNetwork:
             for port in out_edge:
                 if port != source and port != out_port:
                     if port not in self.semaphores.keys():
-                        self.semaphores[port] = (train.handle, 'out', self.map_direction(port))
+                        self.semaphores[port] = (train.handle, 'out', self.map_direction(port), self.rail_env._elapsed_steps)
 
             prox_edge = prox_list[0]
             for port in prox_edge:
                 if port != source and port != out_port:
                     if port not in self.semaphores.keys():
-                        self.semaphores[port] = (train.handle, 'in', self.map_direction(port))
+                        self.semaphores[port] = (train.handle, 'in', self.map_direction(port), self.rail_env._elapsed_steps)
 
         for port in moving_edge:
             if port != source and port != out_port:
                 if port not in self.semaphores.keys():
-                    self.semaphores[port] = (train.handle, 'out', self.map_direction(port))
+                    self.semaphores[port] = (train.handle, 'out', self.map_direction(port), self.rail_env._elapsed_steps)
 
         self.logger.debug(f"CURRENT SEMAPHORES: {self.semaphores}")
 

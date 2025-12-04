@@ -150,7 +150,7 @@ class _SwitchEnv:
             self.rail_env, train, train.initial_position, train.initial_direction, earliest_departure=True)) for train in self.rail_env.agents}
 
         self._move_trains_to_switch()
-        self._init_semaphores()
+        self._init_ports()
 
         self.reset_total_time += time.time() - start_reset_time
 
@@ -366,7 +366,7 @@ class _SwitchEnv:
             # Reset semaphores of trains that have arrived
             if self.train_done[train.handle]:
                 todel=[]
-                for p, (tr, _, _) in self.rail_network.semaphores.items():
+                for p, (tr, _, _, _) in self.rail_network.semaphores.items():
                     if tr == train.handle:
                         todel.append(p)
                 for p in todel:
@@ -486,7 +486,7 @@ class _SwitchEnv:
             # if train.position not in [*rail_pieces, source_node, target_node]:
             #     self.logger.error(f"Train {train.handle} deviated from planned path!")
 
-    def _init_semaphores(self):
+    def _init_ports(self):
         """executed in reset()
 
         finds all train positions and setups all semaphores for all switches.
@@ -537,7 +537,7 @@ class _SwitchEnv:
                     break
 
             self.logger.debug(f"port: {port}")
-            self.rail_network.semaphores[port] = (train.handle, 'out', last_dir)
+            self.rail_network.semaphores[port] = (train.handle, 'out', last_dir, train.earliest_departure)
             self.rail_network.set_trains_next_port(train, port)
 
     @property
