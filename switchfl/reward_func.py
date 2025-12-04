@@ -47,24 +47,24 @@ class StandardRewardFunction(_RewardFunction):
                 
         delay_diff = last_delay - curr_delay
 
-        # if len(port_blocked) == 1:
-        #     if port_blocked[0]:
-        #         reward = delay_diff
-        #     else:
-        #         if train_actions[0] == RailEnvActions.STOP_MOVING:
-        #             reward = delay_diff - self.stop_penalty
-        #         else:
-        #             reward = delay_diff
-        # else:
-        #     if np.sum(port_blocked) == len(port_blocked):
-        #         reward = delay_diff
-        #     else:
-        #         if train_actions[0] == RailEnvActions.STOP_MOVING:
-        #             reward = delay_diff - self.stop_penalty
-        #         else:
-        #             reward = delay_diff
+        if len(port_blocked) == 1:
+            if port_blocked[0]:
+                reward = delay_diff
+            else:
+                if train_actions[0] == RailEnvActions.STOP_MOVING:
+                    reward = delay_diff - self.stop_penalty
+                else:
+                    reward = delay_diff
+        else:
+            if np.sum(port_blocked) == len(port_blocked):
+                reward = delay_diff
+            else:
+                if train_actions[0] == RailEnvActions.STOP_MOVING:
+                    reward = delay_diff - self.stop_penalty
+                else:
+                    reward = delay_diff
 
-        reward = delay_diff
+        # reward = delay_diff
         
         return reward, curr_delay
 
