@@ -149,8 +149,9 @@ class _SwitchEnv:
         self.train_to_last_node = {train.handle: (None, compute_delay(
             self.rail_env, train, train.initial_position, train.initial_direction, earliest_departure=True)) for train in self.rail_env.agents}
 
-        self._move_trains_to_switch()
         self._init_ports()
+        self._move_trains_to_switch()
+        
 
         self.reset_total_time += time.time() - start_reset_time
 
@@ -366,11 +367,20 @@ class _SwitchEnv:
             # Reset semaphores of trains that have arrived
             if self.train_done[train.handle]:
                 todel=[]
-                for p, (tr, _, _, _) in self.rail_network.semaphores.items():
+                for p, (tr, _, _, _, _) in self.rail_network.semaphores.items():
                     if tr == train.handle:
                         todel.append(p)
                 for p in todel:
                     del self.rail_network.semaphores[p]
+
+        # Set semamphores of trains that are about to depart
+        for train in self.rail_env.agents:
+            if self.rail_env._elapsed_steps == train.earliest_departure - 2:
+                port = self.rail_network._train2next_port[train.handle]
+                self.rail_network.semaphores[port] = [train.handle, 'in', self.rail_network.map_direction(port),
+                                                        train.earliest_departure - 2,
+                                                        train.earliest_departure + self.rail_network._train2next_port_dist[train.handle]]
+
 
         self.rail_env_time += 1
         self._check_action_execution()
@@ -506,6 +516,7 @@ class _SwitchEnv:
                 current_position = train.initial_position
                 current_direction = train.initial_direction
 
+            distance = 0
             while True:
                 if (            
                     self.rail_network.get_switch_on_position(current_position)
@@ -528,6 +539,7 @@ class _SwitchEnv:
                     (current_position,
                     current_direction),
                 )
+                distance += 1
 
             # last pos corresponds to rail_prev_node
             for p in switch.get_port_nodes():
@@ -537,8 +549,15 @@ class _SwitchEnv:
                     break
 
             self.logger.debug(f"port: {port}")
-            self.rail_network.semaphores[port] = (train.handle, 'out', last_dir, train.earliest_departure)
             self.rail_network.set_trains_next_port(train, port)
+            self.rail_network._train2next_port_dist[train.handle] = distance
+
+        # Set semaphores of trains
+        for train in self.rail_env.agents:
+            port = self.rail_network._train2next_port[train.handle]
+            self.rail_network.semaphores[port] = [train.handle, 'in', self.rail_network.map_direction(port),
+                                                    train.earliest_departure - 2,
+                                                    train.earliest_departure + self.rail_network._train2next_port_dist[train.handle]]
 
     @property
     def n_steps(self) -> int:

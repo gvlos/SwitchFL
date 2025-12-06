@@ -14,10 +14,11 @@ import argparse
 if __name__=='__main__':
 
     exp_dir_list = [
-        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init/exp_0/seed_0',
-        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init/exp_0/seed_1',
-        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init/exp_0/seed_2',
-        '/home/gianvito/Desktop/flatland_exp/15_agents_with_init/exp_0/seed_3',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_0',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_1',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_2',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_3',
+        '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_4',
     ]
 
     for exp_dir in exp_dir_list:
@@ -68,4 +69,4 @@ if __name__=='__main__':
                             seed = int(config["MISC"]["random_seed"]))
         
         model.load(model_path)
-        model.test(out_dir=out_dir, plot=False)
+        model.test(out_dir=out_dir, plot=True)
