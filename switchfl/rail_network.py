@@ -315,9 +315,6 @@ class RailNetwork:
                 if p in self.semaphores and self.semaphores[p][0] == train.handle:
                     del self.semaphores[p]
 
-        # Extend semaphores of stopped trains
-        self.extend_semaphores()
-
         # set new semaphores occupied by the train
         if out_port not in self.semaphores.keys():
             self.semaphores[out_port] = [train.handle, 'out', self.map_direction(out_port), self.rail_env._elapsed_steps,

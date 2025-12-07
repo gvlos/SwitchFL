@@ -380,7 +380,9 @@ class _SwitchEnv:
                 self.rail_network.semaphores[port] = [train.handle, 'in', self.rail_network.map_direction(port),
                                                         train.earliest_departure - 2,
                                                         train.earliest_departure + self.rail_network._train2next_port_dist[train.handle]]
-
+                
+        # Extend semaphores of stopped trains
+        self.rail_network.extend_semaphores()
 
         self.rail_env_time += 1
         self._check_action_execution()
