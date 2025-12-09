@@ -248,6 +248,7 @@ class DistrQLearning:
         print(f"Arrived trains: {arrived_trains} / {self.env.rail_env.get_num_agents()}")
         print(f"Trains at destination: {post_step_info['arrived_trains']}")
         print(f"Delays: {delays}")
+        print(f"Num malfunctions: {self.env.num_malfunctions}")
 
         np.savez_compressed(os.path.join(out_dir, f'trains_at_dest.npz'), x=post_step_info['arrived_trains'])
         np.savez_compressed(os.path.join(out_dir, f'delays.npz'), x=delays)
@@ -269,6 +270,7 @@ class DistrQLearning:
         arrived_trains = []
         delays = []
         agent_num_interactions = {agent: 0 for agent in self.env.agents}
+        num_malfunctions = []
 
         rng = np.random.default_rng(self.seed)
 
@@ -289,6 +291,7 @@ class DistrQLearning:
                 np.savez_compressed(os.path.join(out_dir, f'arrived_trains_checkpoint_{t+1}.npz'), x=arrived_trains)
                 np.savez_compressed(os.path.join(out_dir, f'delays_checkpoint_{t+1}.npz'), x=delays)
                 np.savez_compressed(os.path.join(out_dir, f'trains_at_dest_checkpoint_{t+1}.npz'), x=trains_at_destination)
+                np.savez_compressed(os.path.join(out_dir, f'num_malfunctions_checkpoint_{t+1}.npz'), x=num_malfunctions)                
 
             # start_reset_time = time.time()
             self.env.reset(seed=self.seed)
@@ -377,11 +380,13 @@ class DistrQLearning:
 
             arrived_trains.append(len(post_step_info["arrived_trains"]))
             delays.append([v[1] for v in list(self.env.train_to_last_node.values())])
+            num_malfunctions.append(self.env.num_malfunctions)
 
         np.savez_compressed(os.path.join(out_dir, 'cum_reward.npz'), x=cum_reward)
         np.savez_compressed(os.path.join(out_dir, 'arrived_trains.npz'), x=arrived_trains)
         np.savez_compressed(os.path.join(out_dir, 'delays.npz'), x=delays)
         np.savez_compressed(os.path.join(out_dir, 'trains_at_dest.npz'), x=post_step_info["arrived_trains"])
+        np.savez_compressed(os.path.join(out_dir, 'num_malfunctions.npz'), x=num_malfunctions)
         self.env.last_time = last_time
         self.env.action_selection_time = action_selection_time
         self.env.update_time = update_time

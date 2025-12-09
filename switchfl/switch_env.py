@@ -138,6 +138,8 @@ class _SwitchEnv:
         self.train_obs = {train.handle: None for train in self.rail_env.agents}
         self.train_reward = {train.handle: 0.0 for train in self.rail_env.agents}
         self.train_info = {train.handle: None for train in self.rail_env.agents}
+        self.malfunctions = []
+        self.num_malfunctions = 0
 
         self.active_switch_agents = []
         self.active_trains = []
@@ -393,6 +395,10 @@ class _SwitchEnv:
                 switch_agent: True for switch_agent in self.terminations.keys()
             }
             self.terminated = True
+
+        new_trains_malfunctions = np.nonzero([v for v in self.train_info['malfunction'].values()])[0]
+        self.num_malfunctions += len(set(new_trains_malfunctions).difference(set(self.malfunctions)))
+        self.malfunctions = new_trains_malfunctions
 
     def _move_trains_to_switch(self):
         self.logger.debug(symmetric_string("move trains", 80, "-"))
