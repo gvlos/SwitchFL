@@ -448,14 +448,9 @@ class DistrQLearning:
         #     print("Eccola")
 
         # print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
-        if next_agent != previous_agent:
-            self.q_table[tuple(state)][action] = \
-                (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
-                self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
-        else:
-            self.q_table[tuple(state)][action] = \
-                (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
-                self.lr[previous_agent] * reward
+        self.q_table[tuple(state)][action] = \
+            (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \
+            self.lr[previous_agent] * (reward + self.gamma * self.max_q(next_state, next_agent))
         # print(f"New Q-entry: {self.q_table[tuple(state)]}")
         # print("")
 

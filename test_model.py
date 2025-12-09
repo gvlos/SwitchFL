@@ -12,9 +12,9 @@ import time
 
 
 stochastic_data = MalfunctionParameters(
-    malfunction_rate=0,  # Rate of malfunction occurence
-    min_duration=0,  # Minimal duration of malfunction
-    max_duration=0  # Max duration of malfunction
+    malfunction_rate=0.01,  # Rate of malfunction occurence
+    min_duration=5,  # Minimal duration of malfunction
+    max_duration=15  # Max duration of malfunction
 )
 mf = ParamMalfunctionGen(stochastic_data)
 
@@ -57,7 +57,7 @@ if __name__=='__main__':
         malfunction_generator=mf
     )
 
-    num_episodes = 5_000
+    num_episodes = 5
 
     env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
 
@@ -86,4 +86,5 @@ if __name__=='__main__':
     print(f"Total last time: {env.last_time:.1f} seconds")
     print(f"Action selection time: {env.action_selection_time:.1f} seconds")
     print(f"Update time: {env.update_time:.1f} seconds")
-    print(f"Reset time: {env.reset_time:.1f} seconds")
+    print(f"Flatland reset time: {env.reset_time:.1f} seconds")
+    print(f"Total reset time: {env.reset_total_time:.1f} seconds")
