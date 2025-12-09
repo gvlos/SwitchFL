@@ -212,6 +212,7 @@ class DistrQLearning:
         for agent in self.env.agent_iter():
 
             observation, reward, termination, truncation, info = self.env.last()
+            reward = reward[self.env.active_train]
             # print("--------------------------------------")
             # print(f"Active train: {self.env.active_train}")
             # print(f"Observation: {observation}")
@@ -304,6 +305,7 @@ class DistrQLearning:
 
                 start_last_time = time.time()
                 observation, reward, termination, truncation, info = self.env.last()
+                reward = reward[self.env.active_train]
                 last_time += time.time() - start_last_time
                 # print("--------------------------------------")
                 # print(f"Observation: {observation}")
@@ -471,7 +473,7 @@ class DistrQLearning:
         if state is None:  # final state
             return 0.
         self.__check_entry(state, agent)
-        return max(self.q_table[tuple(state)]) if state is not None else 0.
+        return max(self.q_table[tuple(state)])
     
     def max_action(self, state, agent, action_mask):
         """

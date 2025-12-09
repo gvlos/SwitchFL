@@ -127,7 +127,7 @@ class _SwitchEnv:
         self.terminations = {switch_name: False for switch_name in self.agents}
         self.truncations = {switch_name: False for switch_name in self.agents}
         self.rewards = {switch_name: 0 for switch_name in self.agents}
-        self._cumulative_rewards = {switch_name: 0 for switch_name in self.agents}
+        self._cumulative_rewards = {switch_name: {train.handle : 0 for train in self.rail_env.agents} for switch_name in self.agents}
         self.infos = {switch_name: {} for switch_name in self.agents}
         self.step_counter = {switch_name: 0 for switch_name in self.agents}
 
@@ -286,7 +286,7 @@ class _SwitchEnv:
                                                 self.train_to_last_node,
                                                 port_blocked)
 
-        self._cumulative_rewards[switch_id2name(next_switch.id)] = reward
+        self._cumulative_rewards[switch_id2name(next_switch.id)][self.active_train] = reward
         
         self.train_to_last_node[train_agent_handle] = (node_id, curr_delay)
 
