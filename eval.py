@@ -14,9 +14,10 @@ import argparse
 if __name__=='__main__':
 
     exp_dir_list = [
-        '/home/gianvito/Desktop/flatland_exp/40_agents_with_init/exp_0/seed_0',
-        # '/home/gianvito/Desktop/flatland_exp/40_agents_with_init/exp_0/seed_1',
-        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_2',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_high_penalty/exp_0/seed_1',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_high_penalty/exp_0/seed_2',
+        # '/home/gianvito/Desktop/flatland_exp/15_agents_high_penalty/exp_0/seed_3',
+        '/home/gianvito/Desktop/flatland_exp/15_agents_high_penalty/exp_0/seed_4',
         # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_3',
         # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_original_reward/exp_0/seed_4',
     ]
