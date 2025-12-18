@@ -12,6 +12,7 @@ from switchfl.utils.logging import format_logger
 from switchfl.utils.naming import name2switch_id, symmetric_string, get_node_id_on_port_id
 from flatland.envs.rail_env import RailEnv
 from flatland.envs.agent_utils import EnvAgent as TrainAgent
+from flatland.envs.step_utils.states import TrainState
 import numpy as np
 
 def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, earliest_departure=False) -> int:
@@ -44,6 +45,7 @@ def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, ear
     return delay
 
 def check_port_blocked(next_port, out_port, train_agent_handle, rail_network: RailNetwork) -> bool:
+
     port_blocked = False
     if next_port is not None:
         if next_port in rail_network.semaphores:
@@ -53,12 +55,29 @@ def check_port_blocked(next_port, out_port, train_agent_handle, rail_network: Ra
                         and rail_network.semaphores[next_port][3] <= rail_network.rail_env._elapsed_steps \
                             and rail_network.semaphores[next_port][4] >= rail_network.rail_env._elapsed_steps:
                                 port_blocked = True
+
+            elif rail_network.semaphores[next_port][0] != train_agent_handle \
+                and rail_network.semaphores[next_port][1] == 'out' \
+                    and rail_network.semaphores[next_port][2] != rail_network.map_direction(next_port) \
+                        and rail_network.semaphores[next_port][3] <= rail_network.rail_env._elapsed_steps \
+                            and rail_network.semaphores[next_port][4] >= rail_network.rail_env._elapsed_steps \
+                                and rail_network.rail_env.agents[rail_network.semaphores[next_port][0]].state == TrainState.MALFUNCTION:
+                                    port_blocked = True
+
             elif rail_network.semaphores[next_port][0] != train_agent_handle \
                 and rail_network.semaphores[next_port][1] == 'in' \
                     and rail_network.semaphores[next_port][2] != rail_network.map_direction(next_port) \
                         and rail_network.semaphores[next_port][3] <= rail_network.rail_env._elapsed_steps \
                             and rail_network.semaphores[next_port][4] >= rail_network.rail_env._elapsed_steps:
                                 port_blocked = True
+
+            elif rail_network.semaphores[next_port][0] != train_agent_handle \
+                and rail_network.semaphores[next_port][1] == 'in' \
+                    and rail_network.semaphores[next_port][2] == rail_network.map_direction(next_port) \
+                        and rail_network.semaphores[next_port][3] <= rail_network.rail_env._elapsed_steps \
+                            and rail_network.semaphores[next_port][4] >= rail_network.rail_env._elapsed_steps and \
+                                rail_network.rail_env.agents[rail_network.semaphores[next_port][0]].state == TrainState.MALFUNCTION:
+                                    port_blocked = True
     
         if not port_blocked:
             if out_port in rail_network.semaphores:
@@ -68,12 +87,30 @@ def check_port_blocked(next_port, out_port, train_agent_handle, rail_network: Ra
                             and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
                                 and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps:
                                     port_blocked = True
+
+                elif rail_network.semaphores[out_port][0] != train_agent_handle \
+                    and rail_network.semaphores[out_port][1] == 'out' \
+                        and rail_network.semaphores[out_port][2] == rail_network.map_direction(out_port) \
+                            and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
+                                and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps \
+                                    and rail_network.rail_env.agents[rail_network.semaphores[next_port][0]].state == TrainState.MALFUNCTION:
+                                        port_blocked = True                
+
                 elif rail_network.semaphores[out_port][0] != train_agent_handle \
                     and rail_network.semaphores[out_port][1] == 'in' \
                         and rail_network.semaphores[out_port][2] == rail_network.map_direction(out_port) \
                             and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
                                 and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps:
                                     port_blocked = True
+
+                elif rail_network.semaphores[out_port][0] != train_agent_handle \
+                    and rail_network.semaphores[out_port][1] == 'in' \
+                        and rail_network.semaphores[out_port][2] != rail_network.map_direction(out_port) \
+                            and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
+                                and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps \
+                                    and rail_network.rail_env.agents[rail_network.semaphores[next_port][0]].state == TrainState.MALFUNCTION:
+                                        port_blocked = True
+                
     # handle the case in which the stop moving action makes the out_port == in_port
     else:
         if out_port in rail_network.semaphores:
@@ -83,12 +120,29 @@ def check_port_blocked(next_port, out_port, train_agent_handle, rail_network: Ra
                         and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
                             and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps:
                                 port_blocked = True
+
+            elif rail_network.semaphores[out_port][0] != train_agent_handle \
+                and rail_network.semaphores[out_port][1] == 'out' \
+                    and rail_network.semaphores[out_port][2] != rail_network.map_direction(out_port) \
+                        and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
+                            and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps \
+                                and rail_network.rail_env.agents[rail_network.semaphores[next_port][0]].state == TrainState.MALFUNCTION:
+                                    port_blocked = True
+
             elif rail_network.semaphores[out_port][0] != train_agent_handle \
                 and rail_network.semaphores[out_port][1] == 'in' \
                     and rail_network.semaphores[out_port][2] != rail_network.map_direction(out_port) \
                         and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
                             and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps:
                                 port_blocked = True
+
+            elif rail_network.semaphores[out_port][0] != train_agent_handle \
+                and rail_network.semaphores[out_port][1] == 'in' \
+                    and rail_network.semaphores[out_port][2] == rail_network.map_direction(out_port) \
+                        and rail_network.semaphores[out_port][3] <= rail_network.rail_env._elapsed_steps \
+                            and rail_network.semaphores[out_port][4] >= rail_network.rail_env._elapsed_steps \
+                                and rail_network.rail_env.agents[rail_network.semaphores[next_port][0]].state == TrainState.MALFUNCTION:
+                                    port_blocked = True
 
     return port_blocked
 

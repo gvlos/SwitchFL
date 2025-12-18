@@ -237,6 +237,12 @@ class RailNetwork:
                     self.semaphores[p][3] = self.rail_env._elapsed_steps
                     self.semaphores[p][4] = self.semaphores[p][3] + distance
 
+            # if train.state == TrainState.MALFUNCTION:
+            #     port = self._train2next_port[train.handle]
+            #     if port not in self.semaphores.keys():
+            #         self.semaphores[port] = [train.handle, 'in', self.map_direction(port), self.rail_env._elapsed_steps,
+            #                                 self.rail_env._elapsed_steps + self._train2next_port_dist[train.handle]]
+
     def transition_train(
         self, train: TrainAgent, in_port: PortId, out_port: PortId
     ) -> Tuple[_Switch, PortId]:
@@ -306,14 +312,15 @@ class RailNetwork:
         """
 
         # free previous semaphores occupied by the train
-        for p in self.get_switch_on_port(self._train2next_port[train.handle]).get_port_nodes():
-            if p in self.semaphores and self.semaphores[p][0] == train.handle:
-                del self.semaphores[p]
-
-        if self._train_prev_port[train.handle] is not None:
-            for p in self.get_switch_on_port(self._train_prev_port[train.handle]).get_port_nodes():
+        if train.state != TrainState.MALFUNCTION:
+            for p in self.get_switch_on_port(self._train2next_port[train.handle]).get_port_nodes():
                 if p in self.semaphores and self.semaphores[p][0] == train.handle:
                     del self.semaphores[p]
+
+            if self._train_prev_port[train.handle] is not None:
+                for p in self.get_switch_on_port(self._train_prev_port[train.handle]).get_port_nodes():
+                    if p in self.semaphores and self.semaphores[p][0] == train.handle:
+                        del self.semaphores[p]
 
         # set new semaphores occupied by the train
         if out_port not in self.semaphores.keys():
