@@ -201,10 +201,8 @@ class DistrQLearning:
                             self.q_table[tuple(state)][optimal_action] = self.destination_bonus
 
 
-    def test(self, out_dir=None, plot=False):
+    def test(self, out_dir, plot=False):
     
-        out_dir = os.path.join(out_dir, "eval")
-        os.makedirs(out_dir, exist_ok=True)
         self.env.reset(seed=self.seed)
 
         num_iter = 0
@@ -251,6 +249,7 @@ class DistrQLearning:
         print(f"Delays: {delays}")
         print(f"Num malfunctions: {self.env.num_malfunctions}")
 
+        np.savez_compressed(os.path.join(out_dir, f'cum_reward.npz'), x=cum_reward)
         np.savez_compressed(os.path.join(out_dir, f'trains_at_dest.npz'), x=post_step_info['arrived_trains'])
         np.savez_compressed(os.path.join(out_dir, f'delays.npz'), x=delays)
 

@@ -237,11 +237,11 @@ class RailNetwork:
                     self.semaphores[p][3] = self.rail_env._elapsed_steps
                     self.semaphores[p][4] = self.semaphores[p][3] + distance
 
-            # if train.state == TrainState.MALFUNCTION:
-            #     port = self._train2next_port[train.handle]
-            #     if port not in self.semaphores.keys():
-            #         self.semaphores[port] = [train.handle, 'in', self.map_direction(port), self.rail_env._elapsed_steps,
-            #                                 self.rail_env._elapsed_steps + self._train2next_port_dist[train.handle]]
+            if train.state == TrainState.MALFUNCTION:
+                port = self._train2next_port[train.handle]
+                if port not in self.semaphores.keys():
+                    self.semaphores[port] = [train.handle, 'in', self.map_direction(port), self.rail_env._elapsed_steps,
+                                            self.rail_env._elapsed_steps + self._train2next_port_dist[train.handle]]
 
     def transition_train(
         self, train: TrainAgent, in_port: PortId, out_port: PortId
