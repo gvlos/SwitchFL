@@ -8,10 +8,11 @@ import pathlib
 if __name__=='__main__':
     
     random_seeds = [18, 20, 21, 13, 37]
-    out_dir = "/home/gianvito/Desktop/flatland_exp/15_agents_with_init"
+    out_dir = "/home/gianvito/Desktop/flatland_exp/debug"
     
-    num_episodes = 1
+    num_episodes = 5
     checkpoint_freq = 5_000
+    exploit_freq = 1
 
     width = 40
     height = 40
@@ -60,7 +61,8 @@ if __name__=='__main__':
             config["MISC"] = {
                 "random_seed" : random_seed,
                 "out_dir" : exp_dir,
-                "checkpoint_freq" : checkpoint_freq
+                "checkpoint_freq" : checkpoint_freq,
+                "exploit_freq" : exploit_freq
             }
 
             config["ENV"] = {

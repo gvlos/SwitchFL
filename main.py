@@ -18,6 +18,7 @@ def launch_experiment(config_path):
 
     out_dir = config["MISC"]["out_dir"]
     checkpoint_freq = int(config["MISC"]["checkpoint_freq"])
+    exploit_freq = int(config["MISC"]["exploit_freq"])
 
     stochastic_data = MalfunctionParameters(
         malfunction_rate=float(config["ENV"]["malfunction_rate"]),  # Rate of malfunction occurence
@@ -54,7 +55,8 @@ def launch_experiment(config_path):
                         seed = int(config["MISC"]["random_seed"]))
     
     
-    model.learn(num_episodes=int(config["MODEL"]["num_episodes"]), out_dir=out_dir, checkpoint_freq=checkpoint_freq)
+    model.learn(num_episodes=int(config["MODEL"]["num_episodes"]), out_dir=out_dir, checkpoint_freq=checkpoint_freq,
+                exploit_freq=exploit_freq)
 
     model.save(os.path.join(out_dir, "distr_q_model.pkl"))
 

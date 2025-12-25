@@ -201,7 +201,7 @@ class DistrQLearning:
                             self.q_table[tuple(state)][optimal_action] = self.destination_bonus
 
 
-    def test(self, out_dir, plot=False):
+    def test(self, out_dir, plot=False, save_outputs=True):
     
         self.env.reset(seed=self.seed)
 
@@ -240,23 +240,25 @@ class DistrQLearning:
             num_iter += 1
             cum_reward += reward
 
-        self.env.close()
         arrived_trains = len(post_step_info["arrived_trains"])
         delays = [v[1] for v in list(self.env.train_to_last_node.values())]
-        print(f"Terminated in {num_iter} steps ({self.env.rail_env._elapsed_steps} flatland steps), cumulative reward = {cum_reward}")
-        print(f"Arrived trains: {arrived_trains} / {self.env.rail_env.get_num_agents()}")
-        print(f"Trains at destination: {post_step_info['arrived_trains']}")
-        print(f"Delays: {delays}")
-        print(f"Num malfunctions: {self.env.num_malfunctions}")
 
-        np.savez_compressed(os.path.join(out_dir, f'cum_reward.npz'), x=cum_reward)
-        np.savez_compressed(os.path.join(out_dir, f'trains_at_dest.npz'), x=post_step_info['arrived_trains'])
-        np.savez_compressed(os.path.join(out_dir, f'delays.npz'), x=delays)
+        self.env.close()
+        if save_outputs:    
+            print(f"Terminated in {num_iter} steps ({self.env.rail_env._elapsed_steps} flatland steps), cumulative reward = {cum_reward}")
+            print(f"Arrived trains: {arrived_trains} / {self.env.rail_env.get_num_agents()}")
+            print(f"Trains at destination: {post_step_info['arrived_trains']}")
+            print(f"Delays: {delays}")
+            print(f"Num malfunctions: {self.env.num_malfunctions}")
+
+            np.savez_compressed(os.path.join(out_dir, f'cum_reward.npz'), x=cum_reward)
+            np.savez_compressed(os.path.join(out_dir, f'trains_at_dest.npz'), x=post_step_info['arrived_trains'])
+            np.savez_compressed(os.path.join(out_dir, f'delays.npz'), x=delays)
+
+        return cum_reward, arrived_trains, delays
 
 
-
-
-    def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int):
+    def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int, exploit_freq = None):
         """
         Placeholder for the learning method.
 
@@ -272,6 +274,9 @@ class DistrQLearning:
         agent_num_interactions = {agent: 0 for agent in self.env.agents}
         num_malfunctions = []
 
+        cum_reward_exploit = []
+        arrived_trains_exploit = []
+
         rng = np.random.default_rng(self.seed)
 
         last_time = 0.
@@ -280,6 +285,12 @@ class DistrQLearning:
         # reset_time = 0.
 
         for t in range(num_episodes):
+
+            # Exploit round
+            if exploit_freq is not None and (t+1) % exploit_freq == 0:
+                test_reward, test_arrived_trains, _ = self.test(out_dir=None, plot=False, save_outputs=False)
+                cum_reward_exploit.append(test_reward)
+                arrived_trains_exploit.append(test_arrived_trains)
 
             update_dict = {}
             num_iter = 0
@@ -388,6 +399,9 @@ class DistrQLearning:
         np.savez_compressed(os.path.join(out_dir, 'delays.npz'), x=delays)
         np.savez_compressed(os.path.join(out_dir, 'trains_at_dest.npz'), x=post_step_info["arrived_trains"])
         np.savez_compressed(os.path.join(out_dir, 'num_malfunctions.npz'), x=num_malfunctions)
+        if exploit_freq is not None:
+            np.savez_compressed(os.path.join(out_dir, 'cum_reward_exploit.npz'), x=cum_reward_exploit)
+            np.savez_compressed(os.path.join(out_dir, 'arrived_trains_exploit.npz'), x=arrived_trains_exploit)
         self.env.last_time = last_time
         self.env.action_selection_time = action_selection_time
         self.env.update_time = update_time
