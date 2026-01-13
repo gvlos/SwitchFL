@@ -225,7 +225,7 @@ class DistrQLearning:
             post_step_info = self.env.step(action)
 
             if plot:
-                a = self.env.rail_env.render(agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
+                a = self.env.rail_env.render()  # (agent_render_variant=AgentRenderVariant.AGENT_SHOWS_OPTIONS, show_debug=True)
                 fig, ax = plt.subplots(figsize=(8,8))
                 plt.imshow(a)
                 # ax.set_xticks(np.arange(0, a.shape[0], a.shape[0]/self.env.rail_env.width), minor=False)
@@ -308,8 +308,8 @@ class DistrQLearning:
             self.env.reset(seed=self.seed)
             # reset_time += time.time() - start_reset_time
 
-            if t == 0:
-                self.__init_q_table()
+            # if t == 0:
+            #     self.__init_q_table()
 
             for agent in self.env.agent_iter():
 

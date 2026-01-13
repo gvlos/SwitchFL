@@ -14,19 +14,20 @@ import argparse
 if __name__=='__main__':
 
     exp_dir_list = [
-        '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_TRIS/exp_0/seed_0',
-        '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_TRIS/exp_0/seed_1',
-        '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_TRIS/exp_0/seed_2',
-        '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_TRIS/exp_0/seed_3',
-        # '/home/gianvito/Desktop/flatland_exp/15_agents_with_init_TRIS/exp_0/seed_4',
+        "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_0",
+        "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_1",
+        "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_2",
+        "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_3",
+        "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_4",
     ]
 
+    distr_q_model_name = "checkpoint_3000.pkl"
 
     for exp_dir in exp_dir_list:
 
         print(f"Evaluating {exp_dir}")
         config_path = os.path.join(exp_dir, "config.ini")
-        model_path = os.path.join(exp_dir, "distr_q_model.pkl")
+        model_path = os.path.join(exp_dir, distr_q_model_name)
         out_dir = exp_dir
 
         config = configparser.ConfigParser()
@@ -34,9 +35,9 @@ if __name__=='__main__':
 
         checkpoint_freq = int(config["MISC"]["checkpoint_freq"])
 
-        malfunction_rate= 0.005  # float(config["ENV"]["malfunction_rate"])  # Rate of malfunction occurence
-        min_duration= 30  # int(config["ENV"]["min_duration"])  # Minimal duration of malfunction
-        max_duration= 60  # int(config["ENV"]["max_duration"])  # Max duration of malfunction
+        malfunction_rate= float(config["ENV"]["malfunction_rate"])  # Rate of malfunction occurence
+        min_duration= int(config["ENV"]["min_duration"])  # Minimal duration of malfunction
+        max_duration= int(config["ENV"]["max_duration"])  # Max duration of malfunction
 
         stochastic_data = MalfunctionParameters(
             malfunction_rate=malfunction_rate,
