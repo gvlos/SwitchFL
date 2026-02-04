@@ -8,19 +8,21 @@ from flatland.utils.rendertools import AgentRenderVariant
 from switchfl.utils.naming import get_node_id_on_port_id
 import time
 
+# flatland directions
 # class Grid4TransitionsEnum(IntEnum):
 #     NORTH = 0
 #     EAST = 1
 #     SOUTH = 2
 #     WEST = 3
 
+ # actions
 # DO_NOTHING: 0
 # MOVE_LEFT: 1
 # MOVE_FORWARD: 2
 # MOVE_RIGHT: 3
 # STOP_MOVING: 4
 
-# directions
+# switchfl directions
 # .1 = EAST
 # .2 = NORTH
 # .3 = WEST
@@ -36,6 +38,16 @@ class DistrQLearning:
         The discount factor.
     default_q : float
         The default value for the Q-table.
+    epsilon : float
+        The exploration rate.
+    epsilon_decay_rate : float
+        The decay rate for the exploration rate.
+    lr : float
+        The learning rate.
+    lr_decay_rate : float
+        The decay rate for the learning rate.
+    seed : int
+        The random seed. 
     """
     def __init__(self, env : ASyncSwitchEnv, gamma = 1., epsilon = 0.4, epsilon_decay_rate = 0., lr = 0.4, lr_decay_rate = 0., default_q = 0., seed = 450565):
         self.env = env  # Environment to interact with
@@ -46,12 +58,11 @@ class DistrQLearning:
         self.initial_lr = lr
         self.lr = {agent: lr for agent in self.env.agents}
         self.lr_decay_rate = lr_decay_rate
-        self.default = [default_q] # MISSING NUMBER OF ACTIONS
+        self.default = [default_q]
         self.q_table = {}
         self.seed = seed
         self.optimal_init = 500.
         self.destination_bonus = 1000.
-        # self.rng  = np.random.RandomState(seed)
 
     def __check_entry(self, state, agent):
         """
@@ -89,7 +100,7 @@ class DistrQLearning:
 
     def __init_q_table(self):
         """
-        Initializes the Q-table.
+        Initializes the Q-table wiith optimistic values for shortest path actions.
         """
         for agent in self.env.rail_env.agents:
             shortest_path = self.env.rail_env.distance_map.get_shortest_paths(
@@ -105,18 +116,7 @@ class DistrQLearning:
                     in_port = tuple(pos + direction/10 for pos in wp.position)
 
                     semaphores = list(itertools.product([0, 1], repeat=num_ports))[1:]  # exclude all red
-                    # delays = []
-                    # for delay_range in range(3):
-                    #     for el in list(itertools.product([-1, delay_range], repeat=num_ports)):
-                    #         if np.sum(el) == -num_ports +1 + delay_range:
-                    #             delays.append(el)
 
-                    # targets = -1 * np.ones((num_ports, num_ports*2), dtype=np.int64)
-                    # j = 0
-                    # for i in range(num_ports):
-                    #     targets[i, j] = agent.target[0]
-                    #     targets[i, j+1] = agent.target[1]
-                    #     j += 2
                     delays = []
                     targets = []
 
@@ -202,6 +202,15 @@ class DistrQLearning:
 
 
     def test(self, out_dir, plot=False, save_outputs=True):
+        """ Tests the agent in the environment.
+            Parameters
+            ----------
+            out_dir : str
+                The output directory to save the results.
+            plot : bool
+                Whether to plot the environment at each step.
+            save_outputs : bool
+                Whether to save the outputs to files."""
     
         self.env.reset(seed=self.seed)
 
@@ -260,12 +269,18 @@ class DistrQLearning:
 
     def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int, exploit_freq = None):
         """
-        Placeholder for the learning method.
+        Trains the agent in the environment.
 
         Parameters
         ----------
-        num_timesteps : int
-            The number of timesteps to learn.
+        num_episodes : int
+            The number of episodes to train the agent.
+        out_dir : str
+            The output directory to save the results.
+        checkpoint_freq : int
+            The frequency (in episodes) to save checkpoints.
+        exploit_freq : int
+            The frequency (in episodes) to exploit the learned policy.
         """
 
         cum_reward = np.zeros(num_episodes)
@@ -296,6 +311,7 @@ class DistrQLearning:
             num_iter = 0
             trains_at_destination = []
 
+            # Save checkpoint
             if (t+1) % checkpoint_freq == 0:
                 self.save(os.path.join(out_dir, f"checkpoint_{t+1}.pkl"))
                 np.savez_compressed(os.path.join(out_dir, f'cum_reward_checkpoint_{t+1}.npz'), x=cum_reward)
@@ -308,8 +324,9 @@ class DistrQLearning:
             self.env.reset(seed=self.seed)
             # reset_time += time.time() - start_reset_time
 
-            # if t == 0:
-            #     self.__init_q_table()
+            # Init q table
+            if t == 0:
+                self.__init_q_table()
 
             for agent in self.env.agent_iter():
 
@@ -324,6 +341,7 @@ class DistrQLearning:
                 if termination or truncation:
                     break
 
+                # Epsilon-greedy policy
                 start_action_selection_time = time.time()
                 self.__decay_epsilon(agent, agent_num_interactions[agent])
                 if rng.random() < self.epsilon[agent]:
@@ -340,7 +358,8 @@ class DistrQLearning:
 
                 start_update_time = time.time()
                 agent_id = name2switch_id(agent)
-                # Può accadere che le observation consecutive sono di switch non consecutivi quindi bisogna selezionare l'observation giusta per fare l'update
+               
+               # Update Q-values
                 if (agent_id, active_train) in update_dict:
                     previous_obs = update_dict[(agent_id, active_train)][0]
                     previous_act = update_dict[(agent_id, active_train)][1]
@@ -409,6 +428,14 @@ class DistrQLearning:
         self.env.close()
 
     def _get_next_q_agent(self, agent, action):
+        """ Returns the next Q-learning agent based on the current agent and action.
+        
+        Parameters
+        ----------
+        agent : str
+            The current agent.
+        action : int
+            The action taken by the agent."""
         
         switch_id = name2switch_id(agent)
         switch = self.env.rail_network.get_switch_on_position(switch_id)
@@ -459,10 +486,6 @@ class DistrQLearning:
 
         self.__decay_lr(previous_agent, agent_num_interactions[previous_agent])
 
-        # if tuple(state) == (40,45,1,1,1,0,-1,-1,57,76,-1,-1,-1,-1,-1,0,-1,-1):
-        #     print("Eccola")
-
-        # print(f"Previous Q-entry: {self.q_table[tuple(state)]}")
         if next_agent != previous_agent:
             self.q_table[tuple(state)][action] = \
                 (1 - self.lr[previous_agent]) * self.q_table[tuple(state)][action] + \

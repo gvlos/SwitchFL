@@ -13,6 +13,8 @@ import argparse
 
 if __name__=='__main__':
 
+
+    # Set of experiment directories to evaluate
     exp_dir_list = [
         "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_0",
         "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_1",
@@ -21,8 +23,14 @@ if __name__=='__main__':
         "/home/gianvito/Desktop/flatland_exp/100_agents_challenge/exp_0/seed_4",
     ]
 
+    # Name of the trained model file to load
     distr_q_model_name = "checkpoint_3000.pkl"
 
+
+
+    # -------------------------------------------------------------------------------------
+    # DO NOT MODIFY BELOW THIS LINE
+    # -------------------------------------------------------------------------------------
     for exp_dir in exp_dir_list:
 
         print(f"Evaluating {exp_dir}")

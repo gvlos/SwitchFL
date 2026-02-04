@@ -37,6 +37,7 @@ def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, ear
 
     # shortest_path = rail_env.distance_map.get_shortest_paths(max_depth=None, agents = rail_env.agents, agent_handle=train.handle)[train.handle]
     # min_dist_to_target = len(shortest_path) - 1
+    
     if earliest_departure:
         delay = train.earliest_departure - train.latest_arrival + min_dist_to_target
     else:
@@ -45,6 +46,13 @@ def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, ear
     return delay
 
 def check_port_blocked(next_port, out_port, train_agent_handle, rail_network: RailNetwork) -> bool:
+    """ Checks if the given port is blocked by a semaphore.
+    
+        Args:   
+            next_port (int): The id of the next port.
+            out_port (int): The id of the out port.
+            train_agent_handle (int): The handle of the train agent.
+            rail_network (RailNetwork): The rail network."""
 
     port_blocked = False
     if next_port is not None:
@@ -240,6 +248,12 @@ class StandardObserver(_Observer):
         return 2
 
     def observe(self, agent, env, rail_network: RailNetwork) -> Tuple[ndarray, Dict[str, Any]]:
+        """Observe the environment and return the observation for the given agent.
+        Args:
+            agent (str): The ID of the agent.
+            env (RailEnv): The rail environment.
+            rail_network (RailNetwork): The rail network."""
+        
         self.logger.debug(symmetric_string(f"obs {agent}", frame="~"))
         node_id = name2switch_id(agent)
         switch: _Switch = rail_network.get_switch_on_position(node_id)
@@ -298,6 +312,12 @@ class StandardObserver(_Observer):
         return observation, info
     
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):
+        """Get the observation space for the given agent.
+        Args:
+            agent (str): The ID of the agent.
+            rail_env (RailEnv): The rail environment.
+            rail_network (RailNetwork): The rail network.
+            seed (int, optional): The random seed. Defaults to None."""
         node_id = name2switch_id(agent)
         switch = rail_network.get_switch_on_position(node_id)
         return MultiDiscreteSwitchObsSpace(

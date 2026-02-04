@@ -21,43 +21,35 @@ mf = ParamMalfunctionGen(stochastic_data)
 
 if __name__=='__main__':
 
+
+    # Output directory for experiment results
     out_dir = '/home/gianvito/Desktop/debug'
     os.makedirs(out_dir, exist_ok=True)
 
-
-    # random_seed = 450565
-    # rail_env = RailEnv(
-    #     width=18,
-    #     height=18,
-    #     rail_generator=sparse_rail_generator(
-    #         max_num_cities=5,
-    #         grid_mode=True,
-    #         max_rails_between_cities=1,
-    #         max_rail_pairs_in_city=1,
-    #         seed=random_seed,
-    #     ),
-    #     line_generator=sparse_line_generator(seed=random_seed),
-    #     number_of_agents=2,
-    #     malfunction_generator=mf
-    # )
-
-    random_seed = 67
+    # Environment setup
+    random_seed = 450565
     rail_env = RailEnv(
-        width=100,
-        height=100,
+        width=18,
+        height=18,
         rail_generator=sparse_rail_generator(
-            max_num_cities=25,
+            max_num_cities=5,
             grid_mode=True,
-            max_rails_between_cities=4,
-            max_rail_pairs_in_city=4,
+            max_rails_between_cities=1,
+            max_rail_pairs_in_city=1,
             seed=random_seed,
         ),
         line_generator=sparse_line_generator(seed=random_seed),
-        number_of_agents=100,
+        number_of_agents=2,
         malfunction_generator=mf
     )
 
     num_episodes = 5
+
+
+
+    # -------------------------------------------------------------------------------------
+    # DO NOT MODIFY BELOW THIS LINE
+    # -------------------------------------------------------------------------------------
 
     env = ASyncSwitchEnv(rail_env, render_mode="human", max_steps=100_000)
 

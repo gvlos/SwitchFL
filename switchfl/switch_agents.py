@@ -104,6 +104,10 @@ class _Switch(ABC):
     def get_action_mask(self, port: PortId, semaphore) -> np.ndarray:
         """which actions are allowed wrt. incoming train semaphores
 
+        Args:
+            port (PortId): from which port the train is coming
+            semaphore (List[bool]): which target ports are blocked
+
         Returns:
             np.ndarray: integer array. 1: action allowed, 0: action forbidden (n_actions, )
         """

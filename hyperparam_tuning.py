@@ -7,13 +7,19 @@ import pathlib
 
 if __name__=='__main__':
     
+    # Define hyperparameter search space and other experiment settings
+
+    # Each random seed corresponds to a different run for the same hyperparameter setting
     random_seeds = [18, 20, 21, 13, 37]
+
+    # Output directory for all experiments
     out_dir = "/home/gianvito/Desktop/flatland_exp/debug"
     
     num_episodes = 5
-    checkpoint_freq = 5_000
-    exploit_freq = 1
+    checkpoint_freq = 5_000  # checkpoint every n episodes
+    exploit_freq = 1  # exploit every n episodes
 
+    # Environment parameters
     width = 40
     height = 40
     max_num_cities = 7
@@ -24,16 +30,7 @@ if __name__=='__main__':
     min_duration = 0
     max_duration = 0
 
-    # width = 18
-    # height = 18
-    # max_num_cities = 5
-    # max_rails_between_cities = 1
-    # max_rail_pairs_in_city = 1
-    # number_of_agents = 2
-    # malfunction_rate = 0.
-    # min_duration = 0
-    # max_duration = 0
-
+    # Hyperparameter search space
     hyperparams = {
         "epsilon" : [0.4],
         "epsilon_decay_rate" : [0.999],
@@ -41,9 +38,14 @@ if __name__=='__main__':
         "lr_decay_rate" : [1.0],
     }
 
+    # Fixed learning parameters
     gamma = 1.
     default_q = 0.
 
+    
+
+    # ----------------------------------------------------------------------
+    # DO NOT MODIFY BELOW THIS LINE
     # ----------------------------------------------------------------------
 
     model_param_list = list((dict(zip(hyperparams.keys(), values)) 

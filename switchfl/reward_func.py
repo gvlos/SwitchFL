@@ -23,6 +23,17 @@ class StandardRewardFunction(_RewardFunction):
     def __call__(self, train, train_actions, train_to_last_node, port_blocked) -> float:
         """
         Updates the rewards based on the current state of the environment
+
+        Parameters
+        ----------
+        train : TrainAgent
+            The train agent for which the reward is being calculated.
+        train_actions : List[int]
+            The list of actions taken by the train.
+        train_to_last_node : Dict[int, Tuple[Tuple[int, int], int]]
+            A mapping from train handles to their last node positions and delays.
+        port_blocked : List[bool]
+            A list indicating whether the ports are blocked.
         """
         new_position = train.position
         new_direction = train.direction
@@ -63,8 +74,6 @@ class StandardRewardFunction(_RewardFunction):
                     reward = delay_diff - self.stop_penalty
                 else:
                     reward = delay_diff
-
-        # reward = delay_diff
         
         return reward, curr_delay
 

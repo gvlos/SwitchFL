@@ -11,6 +11,11 @@ import time
 import argparse
 
 def launch_experiment(config_path):
+    """Launches a training experiment based on the provided configuration file.
+    
+    Args:
+        config_path (str): Path to the configuration file.
+    """
     start_time = time.time()
 
     config = configparser.ConfigParser()
