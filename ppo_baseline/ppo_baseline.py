@@ -134,7 +134,7 @@ class PPOAgent(nn.Module):
         if not self.buffer['rewards']:
             return
         
-        print(f"Aggiornamento Agente {self.agent_id} con {len(self.buffer['states'])} transizioni.")
+        # print(f"Aggiornamento Agente {self.agent_id} con {len(self.buffer['states'])} transizioni.")
             
         # 2. Conversione dell'intero buffer in Tensori
         rewards = torch.tensor(self.buffer['rewards'], dtype=torch.float32).to(device).view(-1)
@@ -250,7 +250,7 @@ if __name__ == "__main__":
     # Creiamo un agente separato per ogni handle (0, 1, ..., N-1)
     agents = {}
     for handle in range(env.get_num_agents()):
-        print(f"Inizializzazione Agente PPO indipendente per il Treno {handle}")
+        # print(f"Inizializzazione Agente PPO indipendente per il Treno {handle}")
         agents[handle] = PPOAgent(state_dim, action_dim, agent_id=handle)
 
     timestep_counter = 0
@@ -306,7 +306,7 @@ if __name__ == "__main__":
                 
         # Calcolo reward medio tra gli agenti per stampare statistiche
         avg_reward = sum(total_rewards.values()) / N_AGENTS
-        print(f"Episodio {i_episode} | Reward Medio Agenti: {avg_reward:.2f} | Rewards: {list(total_rewards.values())}")
+        # print(f"Episodio {i_episode} | Reward Medio Agenti: {avg_reward:.2f} | Rewards: {list(total_rewards.values())}")
 
         arrived_trains[i_episode] = len([train.handle for train in env.agents \
                 if train.position == None and train.arrival_time != None])
@@ -321,7 +321,7 @@ if __name__ == "__main__":
                 os.makedirs(os.path.dirname(model_path), exist_ok=True)
                 torch.save(agents[handle].state_dict(), model_path)
 
-    print("Addestramento Independent PPO completato.")
+    # print("Addestramento Independent PPO completato.")
 
 
     np.savez_compressed(os.path.join(out_dir, f'cum_reward.npz'), x=list(total_rewards.values()))
