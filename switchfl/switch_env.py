@@ -96,7 +96,7 @@ class _SwitchEnv:
         if seed is not None:
             set_seed(seed)
         start_reset_time = time.time()
-        self.rail_env.reset(regenerate_rail=False, regenerate_schedule=False, random_seed=seed)
+        self.rail_env.reset(random_seed=seed)
         self.reset_time += time.time() - start_reset_time
         
         # NOTE: Force deterministic agent ordering and handle assignment

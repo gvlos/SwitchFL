@@ -16,10 +16,10 @@ import os
 LEARNING_RATE = 5e-5
 GAMMA = 1.00
 EPS_CLIP = 0.2
-K_EPOCHS = 2
+K_EPOCHS = 20
 UPDATE_TIMESTEP = 200
-MAX_EPISODES = 2
-CHECKPOINT_INTERVAL = 1  # Salva modelli e dati ogni N episodi
+MAX_EPISODES = 5000
+CHECKPOINT_INTERVAL = 500  # Salva modelli e dati ogni N episodi
 
 # Flatland environment parameters
 GRID_WIDTH = 80
@@ -263,8 +263,10 @@ if __name__ == "__main__":
         done_dict = {a: False for a in range(N_AGENTS)}
         done_dict['__all__'] = False
 
+
         while True:
             actions_dict = {}
+            active_agents_this_step = []
             
         # 1. Chi può agire?
             for handle in range(env.get_num_agents()):
@@ -281,15 +283,27 @@ if __name__ == "__main__":
             # 2. Step ambiente
             next_obs_dict, rewards_dict, dones, info = env.step(actions_dict)
             
-            # 3. Salvataggio (IL PUNTO CRITICO)
             for handle in range(env.get_num_agents()):
-                # Salviamo il reward SOLO per gli agenti che hanno effettivamente prodotto un'azione
-                # Questo garantisce che ad ogni azione corrisponda 1 reward
+                if not done_dict.get(handle, False):
+                    obs = obs_dict.get(handle)
+                    if obs is not None:
+                        state = preprocess_obs(obs, GRID_WIDTH, GRID_HEIGHT)
+                        action = agents[handle].select_action(state)
+                        actions_dict[handle] = action
+                        # Segniamoci che questo agente ha appena prodotto uno STATO/AZIONE
+                        active_agents_this_step.append(handle)
+
+            next_obs_dict, rewards_dict, dones, info = env.step(actions_dict)
+
+            # SALVATAGGIO REWARD: Solo per chi ha agito!
+            for handle in active_agents_this_step:
                 reward = rewards_dict[handle]
                 is_done = dones[handle]
-                
-                # Questo aggiunge 1 elemento a rewards, is_terminals
+                # Ora avrai SEMPRE 1 reward per ogni 1 stato
                 agents[handle].store_outcome(reward, is_done)
+
+            obs_dict = next_obs_dict
+            done_dict = dones
 
             if dones['__all__']:
                 done_dict = dones

@@ -267,7 +267,7 @@ class DistrQLearning:
         return cum_reward, arrived_trains, delays
 
 
-    def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int, exploit_freq = None):
+    def learn(self, num_episodes: int, out_dir: str, checkpoint_freq: int, exploit_freq = None, collect_data = False):
         """
         Trains the agent in the environment.
 
@@ -298,6 +298,10 @@ class DistrQLearning:
         action_selection_time = 0.
         update_time = 0.
         # reset_time = 0.
+
+        if collect_data:
+            observation_buffer = []
+            action_buffer = []
 
         for t in range(num_episodes):
 
@@ -337,7 +341,10 @@ class DistrQLearning:
                 # print("--------------------------------------")
                 # print(f"Observation: {observation}")
                 # print(f"Reward: {reward}")
-                
+    
+                if collect_data:
+                    observation_buffer.append(info["reduced_obs"])
+
                 if termination or truncation:
                     break
 
@@ -355,6 +362,9 @@ class DistrQLearning:
 
                 post_step_info = self.env.step(action)
                 active_train = info["active_train"]
+
+                if collect_data:
+                    action_buffer.append(action)
 
                 start_update_time = time.time()
                 agent_id = name2switch_id(agent)
@@ -418,6 +428,11 @@ class DistrQLearning:
         np.savez_compressed(os.path.join(out_dir, 'delays.npz'), x=delays)
         np.savez_compressed(os.path.join(out_dir, 'trains_at_dest.npz'), x=post_step_info["arrived_trains"])
         np.savez_compressed(os.path.join(out_dir, 'num_malfunctions.npz'), x=num_malfunctions)
+
+        if collect_data:
+            np.savez_compressed(os.path.join(out_dir, 'observation_buffer.npz'), x=observation_buffer)
+            np.savez_compressed(os.path.join(out_dir, 'action_buffer.npz'), x=action_buffer)
+        
         if exploit_freq is not None:
             np.savez_compressed(os.path.join(out_dir, 'cum_reward_exploit.npz'), x=cum_reward_exploit)
             np.savez_compressed(os.path.join(out_dir, 'arrived_trains_exploit.npz'), x=arrived_trains_exploit)

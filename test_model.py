@@ -23,27 +23,27 @@ if __name__=='__main__':
 
 
     # Output directory for experiment results
-    out_dir = '/home/gianvito/Desktop/debug'
+    out_dir = '/home/gianvito/Desktop/data_andrea'
     os.makedirs(out_dir, exist_ok=True)
 
     # Environment setup
-    random_seed = 450565
+    random_seed = 64
     rail_env = RailEnv(
-        width=18,
-        height=18,
+        width=80,
+        height=80,
         rail_generator=sparse_rail_generator(
-            max_num_cities=5,
+            max_num_cities=25,
             grid_mode=True,
-            max_rails_between_cities=1,
-            max_rail_pairs_in_city=1,
+            max_rails_between_cities=2,
+            max_rail_pairs_in_city=2,
             seed=random_seed,
         ),
         line_generator=sparse_line_generator(seed=random_seed),
-        number_of_agents=2,
+        number_of_agents=15,
         malfunction_generator=mf
     )
 
-    num_episodes = 5
+    num_episodes = 5000
 
 
 

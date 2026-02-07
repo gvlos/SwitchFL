@@ -15,6 +15,13 @@ from flatland.envs.agent_utils import EnvAgent as TrainAgent
 from flatland.envs.step_utils.states import TrainState
 import numpy as np
 
+def bool2int(x):
+    y = 0
+    for i,j in enumerate(x):
+        y += j<<i
+    return y
+
+
 def compute_delay(rail_env: RailEnv, train: TrainAgent, position, direction, earliest_departure=False) -> int:
     """
     Returns the delay of the given train
@@ -308,7 +315,12 @@ class StandardObserver(_Observer):
         target = np.array(target).astype(int)
         delay = np.array(delay).astype(int)
         observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
-        info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle}
+
+        semaphore_int = [bool2int(semaphore)]
+        reduced_obs = np.concatenate([node_id, semaphore_int, target[target != -1], delay[delay != -1]], dtype=np.int64)
+
+        info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle, 
+                "reduced_obs": reduced_obs}
         return observation, info
     
     def get_observation_space(self, agent, rail_env, rail_network, seed: int = None):
