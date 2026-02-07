@@ -135,8 +135,41 @@ class PPOAgent(nn.Module):
         if not self.buffer['rewards']:
             return
         
-        # print(f"Aggiornamento Agente {self.agent_id} con {len(self.buffer['states'])} transizioni.")
-            
+def update(self):
+    # 0. Sincronizzazione forzata dei buffer
+    n_states = len(self.buffer['states'])
+    n_actions = len(self.buffer['actions'])
+    n_logprobs = len(self.buffer['logprobs'])
+    n_rewards = len(self.buffer['rewards'])
+    n_terms = len(self.buffer['is_terminals'])
+
+    # Troviamo la lunghezza minima comune (dovrebbe essere 172 nel tuo caso)
+    min_len = min(n_states, n_actions, n_logprobs, n_rewards, n_terms)
+
+    if min_len == 0:
+        return
+
+    # Tagliamo tutto alla stessa lunghezza
+    b_states = self.buffer['states'][:min_len]
+    b_actions = self.buffer['actions'][:min_len]
+    b_logprobs = self.buffer['logprobs'][:min_len]
+    b_rewards = self.buffer['rewards'][:min_len]
+    b_terms = self.buffer['is_terminals'][:min_len]
+
+    # 1. Calcolo dei Ritorni (G_t) usando i dati tagliati
+    rewards = []
+    discounted_reward = 0
+    for reward, is_terminal in zip(reversed(b_rewards), reversed(b_terms)):
+        if is_terminal:
+            discounted_reward = 0
+        discounted_reward = reward + (self.gamma * discounted_reward)
+        rewards.insert(0, discounted_reward)
+
+    # 2. Calcolo Advantage
+    with torch.no_grad():
+        _, state_values = self.policy.forward(old_states)
+        # ORA ENTRAMBI SARANNO DI DIMENSIONE 172!
+        advantages = rewards - state_values.view(-1)            
         # 2. Conversione dell'intero buffer in Tensori
         rewards = torch.tensor(self.buffer['rewards'], dtype=torch.float32).to(device).view(-1)
         old_states = torch.stack(self.buffer['states']).detach().to(device)
