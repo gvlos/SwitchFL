@@ -11,6 +11,7 @@ from flatland.envs.line_generators import sparse_line_generator
 from flatland.envs.observations import GlobalObsForRailEnv
 
 import os
+from tqdm import tqdm
 
 # --- Iperparametri ---
 LEARNING_RATE = 5e-5
@@ -256,7 +257,7 @@ if __name__ == "__main__":
     timestep_counter = 0
     arrived_trains = np.zeros(MAX_EPISODES)
 
-    for i_episode in range(MAX_EPISODES):
+    for i_episode in tqdm(range(MAX_EPISODES)):
         obs_dict, info_dict = env.reset(regenerate_rail=False, regenerate_schedule=False, random_seed=SEED)
         
         total_rewards = {h: 0 for h in range(N_AGENTS)}
