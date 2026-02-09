@@ -268,7 +268,7 @@ if __name__ == "__main__":
             for handle in agents:
                 model_path = os.path.join(out_dir, f'ippo_agent_{handle}_checkpoint_{i_episode}.pth')
                 os.makedirs(os.path.dirname(model_path), exist_ok=True)
-                torch.save(agents[handle].state_dict(), model_path)
+                torch.save(agents[handle].policy.state_dict(), model_path)
 
     # print("Addestramento Independent PPO completato.")
 
@@ -282,6 +282,6 @@ if __name__ == "__main__":
     for handle in agents:
         model_path = os.path.join(out_dir, f'ippo_agent_{handle}_final.pth')
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        torch.save(agents[handle].state_dict(), model_path)
+        torch.save(agents[handle].policy.state_dict(), model_path)
 
     print("Addestramento completato!")
