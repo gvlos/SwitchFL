@@ -9,45 +9,44 @@ from flatland.envs.rail_env import RailEnv
 from flatland.envs.rail_generators import sparse_rail_generator
 from flatland.envs.line_generators import sparse_line_generator
 from flatland.envs.observations import GlobalObsForRailEnv
-
-import os
 from tqdm import tqdm
-
-# --- Iperparametri ---
-LEARNING_RATE = 5e-5
-GAMMA = 1.00
-EPS_CLIP = 0.2
-K_EPOCHS = 20
-UPDATE_TIMESTEP = 200
-MAX_EPISODES = 5000
-CHECKPOINT_INTERVAL = 500  # Salva modelli e dati ogni N episodi
+import os
 
 # Flatland environment parameters
-GRID_WIDTH = 80
-GRID_HEIGHT = 80
-N_AGENTS = 15
-N_CITIES = 25
+GRID_WIDTH = 25
+GRID_HEIGHT = 25
+N_AGENTS = 2
+N_CITIES = 15
 MAX_RAILS_BETWEEEN_CITIES = 2
 MAX_RAILS_PAIRS_IN_CITY = 2
 SEED = 64
 
+MAX_EPISODES = 2
+CHECKPOINT_INTERVAL = 500  # Salva modelli e dati ogni N episodi
+UPDATE_TIMESTEP = 200  # Frequenza aggiornamento (step totali)
+K_EPOCHS = 4        # Numero di epoche per ogni update
+MINI_BATCH_SIZE = 64   # Dimensione dei minibatch
+LEARNING_RATE = 1e-4   # LR ridotto per stabilità
+GAMMA = 0.99
+EPS_CLIP = 0.2
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-out_dir = "./ppo_independent_results"
+out_dir = "./ppo_new_results"
 os.makedirs(out_dir, exist_ok=True)
 
-# --- 1. Definizione dell'Agente PPO (Invariata) ---
+# --- 1. ARCHITETTURA ACTOR-CRITIC ---
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(ActorCritic, self).__init__()
         
-        # Shared Feature Extractor (Opzionale: puoi anche separare completamente le reti)
+        # Feature extractor comune
         self.feature_layer = nn.Sequential(
             nn.Linear(state_dim, 128),
             nn.Tanh()
         )
         
-        # Actor head: produce la distribuzione di probabilità delle azioni
+        # Actor head (Policy)
         self.actor = nn.Sequential(
             nn.Linear(128, 64),
             nn.Tanh(),
@@ -55,7 +54,7 @@ class ActorCritic(nn.Module):
             nn.Softmax(dim=-1)
         )
         
-        # Critic head: produce lo scalare V(s)
+        # Critic head (Value function)
         self.critic = nn.Sequential(
             nn.Linear(128, 64),
             nn.Tanh(),
@@ -63,54 +62,31 @@ class ActorCritic(nn.Module):
         )
 
     def forward(self, state):
-        """
-        Implementazione standard del forward pass.
-        Restituisce la probabilità delle azioni e il valore dello stato.
-        """
         features = self.feature_layer(state)
         action_probs = self.actor(features)
         state_value = self.critic(features)
         return action_probs, state_value
     
     def act(self, state):
-        # Utilizza il forward per campionare un'azione
         action_probs, _ = self.forward(state)
         dist = Categorical(action_probs)
         action = dist.sample()
         return action.item(), dist.log_prob(action)
     
     def evaluate(self, state, action):
-        # Utilizza il forward per valutare azioni specifiche durante l'update
         action_probs, state_values = self.forward(state)
         dist = Categorical(action_probs)
-        
         action_logprobs = dist.log_prob(action)
         dist_entropy = dist.entropy()
-        
         return action_logprobs, state_values, dist_entropy
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.distributions import Categorical
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.distributions import Categorical
-import numpy as np
-
+# --- 2. AGENTE PPO INDIPENDENTE ---
 class PPOAgent(nn.Module):
-    def __init__(self, state_dim, action_dim, agent_id, lr=3e-4, gamma=0.99, K_epochs=4, eps_clip=0.2, mini_batch_size=64):
+    def __init__(self, state_dim, action_dim, agent_id):
         super(PPOAgent, self).__init__()
         self.agent_id = agent_id
-        self.gamma = gamma
-        self.eps_clip = eps_clip
-        self.K_epochs = K_epochs
-        self.mini_batch_size = mini_batch_size # Dimensione del minibatch
-        
         self.policy = ActorCritic(state_dim, action_dim).to(device)
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=LEARNING_RATE)
         self.policy_old = ActorCritic(state_dim, action_dim).to(device)
         self.policy_old.load_state_dict(self.policy.state_dict())
         
@@ -130,249 +106,182 @@ class PPOAgent(nn.Module):
     def store_outcome(self, reward, is_done):
         self.buffer['rewards'].append(reward)
         self.buffer['is_terminals'].append(is_done)
-        
+
     def update(self):
-        # 0. Sincronizzazione forzata dei buffer
-        # n_states = len(self.buffer['states'])
-        # n_actions = len(self.buffer['actions'])
-        # n_logprobs = len(self.buffer['logprobs'])
-        # n_rewards = len(self.buffer['rewards'])
-        # n_terms = len(self.buffer['is_terminals'])
+        # 0. Sincronizzazione Buffer (Risolve il problema Size Mismatch)
+        n_states = len(self.buffer['states'])
+        n_rewards = len(self.buffer['rewards'])
+        min_len = min(n_states, n_rewards)
+        
+        if min_len < 2: return # Troppo pochi dati per l'update
 
-        # # Troviamo la lunghezza minima comune (dovrebbe essere 172 nel tuo caso)
-        # min_len = min(n_states, n_actions, n_logprobs, n_rewards, n_terms)
+        # Taglio dei dati alla lunghezza minima comune
+        b_states = torch.stack(self.buffer['states'][:min_len]).detach().to(device)
+        b_actions = torch.stack(self.buffer['actions'][:min_len]).detach().to(device).view(-1)
+        b_logprobs = torch.stack(self.buffer['logprobs'][:min_len]).detach().to(device).view(-1)
+        b_rewards_raw = self.buffer['rewards'][:min_len]
+        b_terms = self.buffer['is_terminals'][:min_len]
 
-        # if min_len == 0:
-        #     return
-
-        # Tagliamo tutto alla stessa lunghezza
-        b_states = self.buffer['states']#[:min_len]
-        b_actions = self.buffer['actions']#[:min_len]
-        b_logprobs = self.buffer['logprobs']#[:min_len]
-        b_rewards = self.buffer['rewards']#[:min_len]
-        b_terms = self.buffer['is_terminals']#[:min_len]
-
-        # 1. Calcolo dei Ritorni (G_t) usando i dati tagliati
+        # 1. Calcolo dei Ritorni (G_t)
         rewards = []
         discounted_reward = 0
-        for reward, is_terminal in zip(reversed(b_rewards), reversed(b_terms)):
-            if is_terminal:
-                discounted_reward = 0
-            discounted_reward = reward + (self.gamma * discounted_reward)
+        for reward, is_terminal in zip(reversed(b_rewards_raw), reversed(b_terms)):
+            if is_terminal: discounted_reward = 0
+            discounted_reward = reward + (GAMMA * discounted_reward)
             rewards.insert(0, discounted_reward)
+        
+        rewards = torch.tensor(rewards, dtype=torch.float32).to(device).view(-1)
 
-        # 2. Calcolo Advantage
+        # 2. Calcolo Advantage Globale (Anti-NaN e Anti-Warning std)
         with torch.no_grad():
-            _, state_values = self.policy.forward(old_states)
-            # ORA ENTRAMBI SARANNO DI DIMENSIONE 172!
-            advantages = rewards - state_values.view(-1)            
-            # 2. Conversione dell'intero buffer in Tensori
-            rewards = torch.tensor(self.buffer['rewards'], dtype=torch.float32).to(device).view(-1)
-            old_states = torch.stack(self.buffer['states']).detach().to(device)
-            old_actions = torch.stack(self.buffer['actions']).detach().to(device).view(-1)
-            old_logprobs = torch.stack(self.buffer['logprobs']).detach().to(device).view(-1)
+            _, state_values = self.policy.forward(b_states)
+            advantages = rewards - state_values.view(-1)
+            if advantages.numel() > 1:
+                std = advantages.std()
+                if std > 1e-8:
+                    advantages = (advantages - advantages.mean()) / (std + 1e-7)
+            else:
+                advantages = advantages - advantages.mean()
 
-            # 3. Calcolo dell'Advantage sull'intero batch (per stabilità)
-            with torch.no_grad():
-                _, state_values = self.policy.forward(old_states)
-                advantages = rewards - state_values.view(-1)
+        # 3. Minibatch SGD
+        indices = np.arange(min_len)
+        for _ in range(K_EPOCHS):
+            np.random.shuffle(indices)
+            for start in range(0, min_len, MINI_BATCH_SIZE):
+                idx = indices[start : start + MINI_BATCH_SIZE]
+                if len(idx) < 2: continue # Salta minibatch troppo piccoli per std()
+
+                # Estrazione minibatch
+                mb_states = b_states[idx]
+                mb_actions = b_actions[idx]
+                mb_logprobs = b_logprobs[idx]
+                mb_advantages = advantages[idx]
+                mb_rewards = rewards[idx]
+
+                # Valutazione
+                logprobs, state_values, dist_entropy = self.policy.evaluate(mb_states, mb_actions)
                 
-                # --- FIX PER IL WARNING std() ---
-                # Controlliamo che ci sia più di un elemento per calcolare lo std correttamente
-                if advantages.numel() > 1:
-                    std = advantages.std()
-                    # Se lo std è quasi zero (es. tutti i reward uguali), evitiamo la divisione
-                    if std > 1e-8:
-                        advantages = (advantages - advantages.mean()) / (std + 1e-7)
-                    else:
-                        advantages = advantages - advantages.mean()
-                else:
-                    # Se c'è un solo elemento, lo scarto dalla media è per definizione zero
-                    advantages = advantages - advantages.mean()
-
-            # --- LOGICA MINIBATCH ---
-            dataset_size = old_states.size(0)
-            indices = np.arange(dataset_size)
-
-            for _ in range(self.K_epochs):
-                # Mischiamo gli indici ad ogni epoca
-                np.random.shuffle(indices)
+                # PPO Loss
+                ratios = torch.exp(logprobs.view(-1) - mb_logprobs)
+                surr1 = ratios * mb_advantages
+                surr2 = torch.clamp(ratios, 1 - EPS_CLIP, 1 + EPS_CLIP) * mb_advantages
                 
-                for start in range(0, dataset_size, self.mini_batch_size):
-                    end = start + self.mini_batch_size
-                    batch_idx = indices[start:end]
-                    
-                    # Estraiamo il minibatch
-                    mb_states = old_states[batch_idx]
-                    mb_actions = old_actions[batch_idx]
-                    mb_logprobs = old_logprobs[batch_idx]
-                    mb_advantages = advantages[batch_idx]
-                    mb_rewards = rewards[batch_idx]
+                loss = -torch.min(surr1, surr2) + \
+                       0.5 * self.loss_criterion(state_values.view(-1), mb_rewards) - \
+                       0.01 * dist_entropy.mean()
 
-                    # Valutazione della policy attuale sui campioni del minibatch
-                    logprobs, state_values, dist_entropy = self.policy.evaluate(mb_states, mb_actions)
-                    
-                    # Calcolo Ratio e PPO Loss
-                    ratios = torch.exp(logprobs.view(-1) - mb_logprobs)
-                    
-                    surr1 = ratios * mb_advantages
-                    surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * mb_advantages
-                    
-                    loss = -torch.min(surr1, surr2) + \
-                        0.5 * self.loss_criterion(state_values.view(-1), mb_rewards) - \
-                        0.01 * dist_entropy.mean()
-
-                    # Aggiornamento gradienti per questo minibatch
-                    self.optimizer.zero_grad()
+                # Backpropagation con Gradient Clipping (Anti-NaN)
+                self.optimizer.zero_grad()
+                if not torch.isnan(loss.mean()):
                     loss.mean().backward()
-
-                    torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
+                    nn.utils.clip_grad_norm_(self.policy.parameters(), 0.5)
                     self.optimizer.step()
-            
-            # Aggiornamento della vecchia policy e pulizia buffer
-            self.policy_old.load_state_dict(self.policy.state_dict())
-            # Puliamo il buffer per il prossimo ciclo di raccolta dati
-            self.clear_buffer()
+        
+        self.policy_old.load_state_dict(self.policy.state_dict())
+        self.buffer = {'states': [], 'actions': [], 'logprobs': [], 'rewards': [], 'is_terminals': []}
 
-    def clear_buffer(self):
-        """Svuota la memoria locale dell'agente."""
-        for key in self.buffer:
-            self.buffer[key] = []
-
-# --- Setup Ambiente e Utility ---
+# --- 3. UTILITY ---
 def create_env():
     obs_builder = GlobalObsForRailEnv()
-    env = RailEnv(
-        width=GRID_WIDTH,
-        height=GRID_HEIGHT,
-        rail_generator=sparse_rail_generator(max_rails_between_cities=MAX_RAILS_BETWEEEN_CITIES, max_rail_pairs_in_city=MAX_RAILS_PAIRS_IN_CITY, 
-                                             max_num_cities=N_CITIES, seed=SEED, grid_mode=True),
-        line_generator=sparse_line_generator(seed=SEED),
+    return RailEnv(
+        width=GRID_WIDTH, height=GRID_HEIGHT,
+        rail_generator=sparse_rail_generator(max_num_cities=2, seed=SEED),
+        line_generator=sparse_line_generator(),
         number_of_agents=N_AGENTS,
         obs_builder_object=obs_builder,
         random_seed=SEED
     )
-    return env
 
 def preprocess_obs(obs, width, height):
-    # if obs is None:
-    #     return np.zeros(width * height * 5)
-    # return np.array(obs).flatten()
     obs_flattened = np.concatenate([o.flatten() for o in obs])
     return obs_flattened
 
-
-# --- Training Loop con Agenti Indipendenti ---
+# --- 4. MAIN TRAINING LOOP ---
 if __name__ == "__main__":
     env = create_env()
-    dummy_obs, _ = env.reset()
+    obs_dict, _ = env.reset()
     
-    # Calcolo dimensioni
-    if dummy_obs[0] is not None:
-        obs_shape = [dummy_obs[0][0].size, dummy_obs[0][1].size, dummy_obs[0][2].size]
-        state_dim = np.sum(obs_shape)
-    else:
-        state_dim = GRID_WIDTH * GRID_HEIGHT * 5 # fallback
-        
+    # Inizializzazione dimensioni e agenti
+    dummy_obs = preprocess_obs(obs_dict[0], GRID_WIDTH, GRID_HEIGHT)
+    state_dim = len(dummy_obs)
     action_dim = 5
-
-    # --- MODIFICA CHIAVE: Creazione Dizionario di Agenti ---
-    # Creiamo un agente separato per ogni handle (0, 1, ..., N-1)
-    agents = {}
-    for handle in range(env.get_num_agents()):
-        # print(f"Inizializzazione Agente PPO indipendente per il Treno {handle}")
-        agents[handle] = PPOAgent(state_dim, action_dim, agent_id=handle)
-
-    timestep_counter = 0
+    
+    agents = {h: PPOAgent(state_dim, action_dim, h) for h in range(N_AGENTS)}
+    
+    print(f"Training iniziato. Device: {device}")
+    total_step_counter = 0
     arrived_trains = np.zeros(MAX_EPISODES)
+    cum_reward = np.zeros(MAX_EPISODES)
+
 
     for i_episode in tqdm(range(MAX_EPISODES)):
-        obs_dict, info_dict = env.reset(regenerate_rail=False, regenerate_schedule=False, random_seed=SEED)
-        
-        total_rewards = {h: 0 for h in range(N_AGENTS)}
-        done_dict = {a: False for a in range(N_AGENTS)}
+        obs_dict, _ = env.reset()
+        done_dict = {i: False for i in range(N_AGENTS)}
         done_dict['__all__'] = False
+        ep_reward = {i: 0 for i in range(N_AGENTS)}
 
-
-        while True:
+        while not done_dict['__all__']:
             actions_dict = {}
-            active_agents_this_step = []
-            
-        # 1. Chi può agire?
-            for handle in range(env.get_num_agents()):
-                # Un agente può agire solo se non ha finito l'episodio
-                if not done_dict.get(handle, False):
-                    # Ottieni osservazione
-                    obs = obs_dict.get(handle)
+            active_this_step = []
+
+            # 1. Scelta Azioni
+            for h in range(N_AGENTS):
+                if not done_dict.get(h, False):
+                    obs = obs_dict.get(h)
                     if obs is not None:
                         state = preprocess_obs(obs, GRID_WIDTH, GRID_HEIGHT)
-                        # Questo aggiunge 1 elemento a states, actions, logprobs
-                        action = agents[handle].select_action(state)
-                        actions_dict[handle] = action
-            
-            # 2. Step ambiente
-            next_obs_dict, rewards_dict, dones, info = env.step(actions_dict)
-            
-            for handle in range(env.get_num_agents()):
-                if not done_dict.get(handle, False):
-                    obs = obs_dict.get(handle)
-                    if obs is not None:
-                        state = preprocess_obs(obs, GRID_WIDTH, GRID_HEIGHT)
-                        action = agents[handle].select_action(state)
-                        actions_dict[handle] = action
-                        # Segniamoci che questo agente ha appena prodotto uno STATO/AZIONE
-                        active_agents_this_step.append(handle)
+                        action = agents[h].select_action(state)
+                        actions_dict[h] = action
+                        active_this_step.append(h)
 
-            next_obs_dict, rewards_dict, dones, info = env.step(actions_dict)
+            # 2. Step Ambiente
+            next_obs_dict, rewards_dict, dones, _ = env.step(actions_dict)
 
-            # SALVATAGGIO REWARD: Solo per chi ha agito!
-            for handle in active_agents_this_step:
-                reward = rewards_dict[handle]
-                is_done = dones[handle]
-                # Ora avrai SEMPRE 1 reward per ogni 1 stato
-                agents[handle].store_outcome(reward, is_done)
+            # 3. Memorizzazione Sincronizzata
+            for h in active_this_step:
+                agents[h].store_outcome(rewards_dict[h], dones[h])
+                ep_reward[h] += rewards_dict[h]
 
             obs_dict = next_obs_dict
             done_dict = dones
+            total_step_counter += 1
 
-            if dones['__all__']:
-                done_dict = dones
-                break
+            # 4. Update Periodico
+            if total_step_counter % UPDATE_TIMESTEP == 0:
+                for h in agents:
+                    agents[h].update()
 
-            # 4. Aggiornamento PPO (Iteriamo su TUTTI gli agenti)
-            if (timestep_counter+1) % UPDATE_TIMESTEP == 0:
-                for handle in agents:
-                    agents[handle].update()
+        if i_episode % 5 == 0:
+            avg_r = sum(ep_reward.values()) / N_AGENTS
+            print(f"Episodio {i_episode} | Reward Medio: {avg_r:.2f}")
 
-            obs_dict = next_obs_dict
-            done_dict = dones
-            timestep_counter += 1
-                
-        # Calcolo reward medio tra gli agenti per stampare statistiche
-        avg_reward = sum(total_rewards.values()) / N_AGENTS
-        # print(f"Episodio {i_episode} | Reward Medio Agenti: {avg_reward:.2f} | Rewards: {list(total_rewards.values())}")
+        cum_reward[i_episode] = sum(ep_reward.values())
 
         arrived_trains[i_episode] = len([train.handle for train in env.agents \
                 if train.position == None and train.arrival_time != None])
         
-        if (timestep_counter+1) % CHECKPOINT_INTERVAL == 0:
-            np.savez_compressed(os.path.join(out_dir, f'cum_reward_{i_episode}.npz'), x=list(total_rewards.values()))
-            np.savez_compressed(os.path.join(out_dir, f'arrived_trains_{i_episode}.npz'), x=arrived_trains)
+        if (total_step_counter+1) % CHECKPOINT_INTERVAL == 0:
+            np.save(os.path.join(out_dir, f'cum_reward_{i_episode}.npy'), cum_reward[:i_episode+1])
+            np.save(os.path.join(out_dir, f'arrived_trains_{i_episode}.npy'), arrived_trains[:i_episode+1])
 
             # Salvataggio modelli intermedi
             for handle in agents:
-                model_path = os.path.join(out_dir, f'ppo_independent_agent_{handle}_checkpoint_{i_episode}.pkl')
+                model_path = os.path.join(out_dir, f'ippo_agent_{handle}_checkpoint_{i_episode}.pth')
                 os.makedirs(os.path.dirname(model_path), exist_ok=True)
                 torch.save(agents[handle].state_dict(), model_path)
 
     # print("Addestramento Independent PPO completato.")
 
-
-    np.savez_compressed(os.path.join(out_dir, f'cum_reward.npz'), x=list(total_rewards.values()))
-    np.savez_compressed(os.path.join(out_dir, f'arrived_trains.npz'), x=arrived_trains)
-
+    with open(os.path.join(out_dir, f'cum_reward.npy'), 'wb') as f:
+        np.save(f, cum_reward)
+        
+    with open(os.path.join(out_dir, f'arrived_trains.npy'), 'wb') as f:
+        np.save(f, arrived_trains)
+        
     # Salvataggio modelli finali
     for handle in agents:
-        model_path = os.path.join(out_dir, f'ppo_independent_agent_{handle}_final.pkl')
+        model_path = os.path.join(out_dir, f'ippo_agent_{handle}_final.pth')
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         torch.save(agents[handle].state_dict(), model_path)
+
+    print("Addestramento completato!")
