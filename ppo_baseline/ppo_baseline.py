@@ -130,113 +130,109 @@ class PPOAgent(nn.Module):
     def store_outcome(self, reward, is_done):
         self.buffer['rewards'].append(reward)
         self.buffer['is_terminals'].append(is_done)
-
-    def update(self):
-        if not self.buffer['rewards']:
-            return
         
-def update(self):
-    # 0. Sincronizzazione forzata dei buffer
-    n_states = len(self.buffer['states'])
-    n_actions = len(self.buffer['actions'])
-    n_logprobs = len(self.buffer['logprobs'])
-    n_rewards = len(self.buffer['rewards'])
-    n_terms = len(self.buffer['is_terminals'])
+    def update(self):
+        # 0. Sincronizzazione forzata dei buffer
+        # n_states = len(self.buffer['states'])
+        # n_actions = len(self.buffer['actions'])
+        # n_logprobs = len(self.buffer['logprobs'])
+        # n_rewards = len(self.buffer['rewards'])
+        # n_terms = len(self.buffer['is_terminals'])
 
-    # Troviamo la lunghezza minima comune (dovrebbe essere 172 nel tuo caso)
-    min_len = min(n_states, n_actions, n_logprobs, n_rewards, n_terms)
+        # # Troviamo la lunghezza minima comune (dovrebbe essere 172 nel tuo caso)
+        # min_len = min(n_states, n_actions, n_logprobs, n_rewards, n_terms)
 
-    if min_len == 0:
-        return
+        # if min_len == 0:
+        #     return
 
-    # Tagliamo tutto alla stessa lunghezza
-    b_states = self.buffer['states'][:min_len]
-    b_actions = self.buffer['actions'][:min_len]
-    b_logprobs = self.buffer['logprobs'][:min_len]
-    b_rewards = self.buffer['rewards'][:min_len]
-    b_terms = self.buffer['is_terminals'][:min_len]
+        # Tagliamo tutto alla stessa lunghezza
+        b_states = self.buffer['states']#[:min_len]
+        b_actions = self.buffer['actions']#[:min_len]
+        b_logprobs = self.buffer['logprobs']#[:min_len]
+        b_rewards = self.buffer['rewards']#[:min_len]
+        b_terms = self.buffer['is_terminals']#[:min_len]
 
-    # 1. Calcolo dei Ritorni (G_t) usando i dati tagliati
-    rewards = []
-    discounted_reward = 0
-    for reward, is_terminal in zip(reversed(b_rewards), reversed(b_terms)):
-        if is_terminal:
-            discounted_reward = 0
-        discounted_reward = reward + (self.gamma * discounted_reward)
-        rewards.insert(0, discounted_reward)
+        # 1. Calcolo dei Ritorni (G_t) usando i dati tagliati
+        rewards = []
+        discounted_reward = 0
+        for reward, is_terminal in zip(reversed(b_rewards), reversed(b_terms)):
+            if is_terminal:
+                discounted_reward = 0
+            discounted_reward = reward + (self.gamma * discounted_reward)
+            rewards.insert(0, discounted_reward)
 
-    # 2. Calcolo Advantage
-    with torch.no_grad():
-        _, state_values = self.policy.forward(old_states)
-        # ORA ENTRAMBI SARANNO DI DIMENSIONE 172!
-        advantages = rewards - state_values.view(-1)            
-        # 2. Conversione dell'intero buffer in Tensori
-        rewards = torch.tensor(self.buffer['rewards'], dtype=torch.float32).to(device).view(-1)
-        old_states = torch.stack(self.buffer['states']).detach().to(device)
-        old_actions = torch.stack(self.buffer['actions']).detach().to(device).view(-1)
-        old_logprobs = torch.stack(self.buffer['logprobs']).detach().to(device).view(-1)
-
-        # 3. Calcolo dell'Advantage sull'intero batch (per stabilità)
+        # 2. Calcolo Advantage
         with torch.no_grad():
             _, state_values = self.policy.forward(old_states)
-            advantages = rewards - state_values.view(-1)
-            
-            # --- FIX PER IL WARNING std() ---
-            # Controlliamo che ci sia più di un elemento per calcolare lo std correttamente
-            if advantages.numel() > 1:
-                std = advantages.std()
-                # Se lo std è quasi zero (es. tutti i reward uguali), evitiamo la divisione
-                if std > 1e-8:
-                    advantages = (advantages - advantages.mean()) / (std + 1e-7)
+            # ORA ENTRAMBI SARANNO DI DIMENSIONE 172!
+            advantages = rewards - state_values.view(-1)            
+            # 2. Conversione dell'intero buffer in Tensori
+            rewards = torch.tensor(self.buffer['rewards'], dtype=torch.float32).to(device).view(-1)
+            old_states = torch.stack(self.buffer['states']).detach().to(device)
+            old_actions = torch.stack(self.buffer['actions']).detach().to(device).view(-1)
+            old_logprobs = torch.stack(self.buffer['logprobs']).detach().to(device).view(-1)
+
+            # 3. Calcolo dell'Advantage sull'intero batch (per stabilità)
+            with torch.no_grad():
+                _, state_values = self.policy.forward(old_states)
+                advantages = rewards - state_values.view(-1)
+                
+                # --- FIX PER IL WARNING std() ---
+                # Controlliamo che ci sia più di un elemento per calcolare lo std correttamente
+                if advantages.numel() > 1:
+                    std = advantages.std()
+                    # Se lo std è quasi zero (es. tutti i reward uguali), evitiamo la divisione
+                    if std > 1e-8:
+                        advantages = (advantages - advantages.mean()) / (std + 1e-7)
+                    else:
+                        advantages = advantages - advantages.mean()
                 else:
+                    # Se c'è un solo elemento, lo scarto dalla media è per definizione zero
                     advantages = advantages - advantages.mean()
-            else:
-                # Se c'è un solo elemento, lo scarto dalla media è per definizione zero
-                advantages = advantages - advantages.mean()
 
-        # --- LOGICA MINIBATCH ---
-        dataset_size = old_states.size(0)
-        indices = np.arange(dataset_size)
+            # --- LOGICA MINIBATCH ---
+            dataset_size = old_states.size(0)
+            indices = np.arange(dataset_size)
 
-        for _ in range(self.K_epochs):
-            # Mischiamo gli indici ad ogni epoca
-            np.random.shuffle(indices)
+            for _ in range(self.K_epochs):
+                # Mischiamo gli indici ad ogni epoca
+                np.random.shuffle(indices)
+                
+                for start in range(0, dataset_size, self.mini_batch_size):
+                    end = start + self.mini_batch_size
+                    batch_idx = indices[start:end]
+                    
+                    # Estraiamo il minibatch
+                    mb_states = old_states[batch_idx]
+                    mb_actions = old_actions[batch_idx]
+                    mb_logprobs = old_logprobs[batch_idx]
+                    mb_advantages = advantages[batch_idx]
+                    mb_rewards = rewards[batch_idx]
+
+                    # Valutazione della policy attuale sui campioni del minibatch
+                    logprobs, state_values, dist_entropy = self.policy.evaluate(mb_states, mb_actions)
+                    
+                    # Calcolo Ratio e PPO Loss
+                    ratios = torch.exp(logprobs.view(-1) - mb_logprobs)
+                    
+                    surr1 = ratios * mb_advantages
+                    surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * mb_advantages
+                    
+                    loss = -torch.min(surr1, surr2) + \
+                        0.5 * self.loss_criterion(state_values.view(-1), mb_rewards) - \
+                        0.01 * dist_entropy.mean()
+
+                    # Aggiornamento gradienti per questo minibatch
+                    self.optimizer.zero_grad()
+                    loss.mean().backward()
+
+                    torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
+                    self.optimizer.step()
             
-            for start in range(0, dataset_size, self.mini_batch_size):
-                end = start + self.mini_batch_size
-                batch_idx = indices[start:end]
-                
-                # Estraiamo il minibatch
-                mb_states = old_states[batch_idx]
-                mb_actions = old_actions[batch_idx]
-                mb_logprobs = old_logprobs[batch_idx]
-                mb_advantages = advantages[batch_idx]
-                mb_rewards = rewards[batch_idx]
-
-                # Valutazione della policy attuale sui campioni del minibatch
-                logprobs, state_values, dist_entropy = self.policy.evaluate(mb_states, mb_actions)
-                
-                # Calcolo Ratio e PPO Loss
-                ratios = torch.exp(logprobs.view(-1) - mb_logprobs)
-                
-                surr1 = ratios * mb_advantages
-                surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * mb_advantages
-                
-                loss = -torch.min(surr1, surr2) + \
-                       0.5 * self.loss_criterion(state_values.view(-1), mb_rewards) - \
-                       0.01 * dist_entropy.mean()
-
-                # Aggiornamento gradienti per questo minibatch
-                self.optimizer.zero_grad()
-                loss.mean().backward()
-
-                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
-                self.optimizer.step()
-        
-        # Aggiornamento della vecchia policy e pulizia buffer
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        # Puliamo il buffer per il prossimo ciclo di raccolta dati
-        self.clear_buffer()
+            # Aggiornamento della vecchia policy e pulizia buffer
+            self.policy_old.load_state_dict(self.policy.state_dict())
+            # Puliamo il buffer per il prossimo ciclo di raccolta dati
+            self.clear_buffer()
 
     def clear_buffer(self):
         """Svuota la memoria locale dell'agente."""
