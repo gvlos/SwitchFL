@@ -13,10 +13,10 @@ from tqdm import tqdm
 import os
 
 # Flatland environment parameters
-GRID_WIDTH = 80
-GRID_HEIGHT = 80
-N_AGENTS = 15
-N_CITIES = 25
+GRID_WIDTH = 25
+GRID_HEIGHT = 25
+N_AGENTS = 2
+N_CITIES = 15
 MAX_RAILS_BETWEEEN_CITIES = 2
 MAX_RAILS_PAIRS_IN_CITY = 2
 SEED = 64
@@ -266,7 +266,7 @@ if __name__ == "__main__":
 
             # Salvataggio modelli intermedi
             for handle in agents:
-                model_path = os.path.join(out_dir, f'ippo_agent_{handle}_checkpoint_{i_episode}.pkl')
+                model_path = os.path.join(out_dir, f'ippo_agent_{handle}_checkpoint_{i_episode}.pth')
                 os.makedirs(os.path.dirname(model_path), exist_ok=True)
                 torch.save(agents[handle].state_dict(), model_path)
 
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     # Salvataggio modelli finali
     for handle in agents:
-        model_path = os.path.join(out_dir, f'ippo_agent_{handle}_final.pkl')
+        model_path = os.path.join(out_dir, f'ippo_agent_{handle}_final.pth')
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         torch.save(agents[handle].state_dict(), model_path)
 
