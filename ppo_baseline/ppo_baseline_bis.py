@@ -81,8 +81,9 @@ class ActorCritic(nn.Module):
         return action_logprobs, state_values, dist_entropy
 
 # --- 2. AGENTE PPO INDIPENDENTE ---
-class PPOAgent:
+class PPOAgent(nn.Module):
     def __init__(self, state_dim, action_dim, agent_id):
+        super(PPOAgent, self).__init__()
         self.agent_id = agent_id
         self.policy = ActorCritic(state_dim, action_dim).to(device)
         self.optimizer = optim.Adam(self.policy.parameters(), lr=LEARNING_RATE)
