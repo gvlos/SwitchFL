@@ -12,9 +12,9 @@ import time
 
 
 stochastic_data = MalfunctionParameters(
-    malfunction_rate=0.01,  # Rate of malfunction occurence
-    min_duration=5,  # Minimal duration of malfunction
-    max_duration=15  # Max duration of malfunction
+    malfunction_rate=0,  # Rate of malfunction occurence
+    min_duration=0,  # Minimal duration of malfunction
+    max_duration=0  # Max duration of malfunction
 )
 mf = ParamMalfunctionGen(stochastic_data)
 
@@ -65,7 +65,7 @@ if __name__=='__main__':
     
     start_time = time.time()
 
-    model.learn(num_episodes=num_episodes, out_dir=out_dir, checkpoint_freq=10000)
+    model.learn(num_episodes=num_episodes, out_dir=out_dir, checkpoint_freq=10000, collect_data=True)
 
     model.save(os.path.join(out_dir, "distr_q_model.pkl"))
 
