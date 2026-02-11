@@ -30,7 +30,7 @@ class _SwitchEnv:
     def __init__(
         self,
         rail_env: RailEnv,
-        max_steps: int = 200,
+        max_steps: int = None,
         render_mode: str = None,
         observer: _Observer = None,
         seed: int = None,
@@ -606,7 +606,7 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
     def __init__(
         self,
         rail_env,
-        max_steps=200,
+        max_steps=None,
         render_mode=None,
         observer=None,
         seed=None,
@@ -650,11 +650,12 @@ class ASyncSwitchEnv(_SwitchEnv, AECEnv):
 
         # check for done episode
         self.step_counter[self.agent_selection] += 1
-        if self.n_steps > self.max_steps:
-            self.truncations = {
-                switch_agent: True for switch_agent in self.truncations.keys()
-            }
-            self.truncated = True
+        if self.max_steps is not None:
+            if self.n_steps > self.max_steps:
+                self.truncations = {
+                    switch_agent: True for switch_agent in self.truncations.keys()
+                }
+                self.truncated = True
 
         arrived_trains = [train.handle for train in self.rail_env.agents \
                           if train.position == None and train.arrival_time != None]
