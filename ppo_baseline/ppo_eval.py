@@ -1,3 +1,4 @@
+from xml.parsers.expat import model
 import numpy as np
 import torch
 from flatland.envs.rail_env import RailEnv
@@ -13,10 +14,10 @@ import os
 
 
 # Flatland environment parameters
-GRID_WIDTH = 25
-GRID_HEIGHT = 25
-N_AGENTS = 2
-N_CITIES = 15
+GRID_WIDTH = 80
+GRID_HEIGHT = 80
+N_AGENTS = 15
+N_CITIES = 25
 MAX_RAILS_BETWEEEN_CITIES = 2
 MAX_RAILS_PAIRS_IN_CITY = 2
 SEED = 64
@@ -58,15 +59,15 @@ def test_agents(render=True):
     # 2. Caricamento Modelli
     models = {}
     for h in range(N_AGENTS):
-        model = ActorCritic(state_dim, action_dim).to(device)
+        policy = ActorCritic(state_dim, action_dim).to(device)
         try:
-            model.load_state_dict(torch.load(f"/home/gianvito/Documents/SwitchFL-1/ppo_new_results/ippo_agent_{h}_final.pth", map_location=device))
-            model.eval() # Modalità valutazione: disattiva dropout/batchnorm
-            models[h] = model
+            policy.load_state_dict(torch.load(f"/home/gianvito/Desktop/flatland_exp/ppo_new_results/ippo_agent_{h}_final.pth", map_location=device))
+            policy.eval() # Modalità valutazione: disattiva dropout/batchnorm
+            models[h] = policy
             print(f"Modello Agente {h} caricato con successo.")
         except FileNotFoundError:
             print(f"Attenzione: file ippo_agent_{h}_final.pth non trovato. L'agente userà pesi casuali.")
-            models[h] = model
+            models[h] = policy
 
     # 3. Ciclo di Valutazione
     num_test_episodes = 1

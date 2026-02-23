@@ -61,7 +61,7 @@ def launch_experiment(config_path):
     
     
     model.learn(num_episodes=int(config["MODEL"]["num_episodes"]), out_dir=out_dir, checkpoint_freq=checkpoint_freq,
-                exploit_freq=exploit_freq)
+                exploit_freq=exploit_freq, collect_data=True)
 
     model.save(os.path.join(out_dir, "distr_q_model.pkl"))
 
