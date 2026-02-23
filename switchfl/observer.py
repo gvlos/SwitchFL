@@ -317,7 +317,7 @@ class StandardObserver(_Observer):
         observation = np.concatenate([node_id, semaphore, target, delay], dtype=np.int64)
 
         semaphore_int = [bool2int(semaphore)]
-        reduced_obs = np.concatenate([node_id, semaphore_int, target[target != -1], delay[delay != -1], [active_train_handle]], dtype=np.int64)
+        reduced_obs = np.concatenate([node_id, semaphore_int, target[target != -1], delay[delay != -1], [active_train_handle], [env.rail_env._elapsed_steps]], dtype=np.int64)
 
         info = {"action_mask": switch.get_action_mask(current_port, semaphore), "active_train": active_train_handle, 
                 "reduced_obs": reduced_obs}
